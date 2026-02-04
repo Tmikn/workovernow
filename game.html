@@ -61,34 +61,38 @@
         let score = 0;
         const icons = ['📊', '📧', '⏰', '📅', '📝', '📞'];
 
-        function createTask() {
-            const task = document.createElement('div');
-            task.className = 'task';
-            task.innerHTML = icons[Math.floor(Math.random() * icons.length)];
-            
-            // 随机位置
-            const x = Math.random() * (window.innerWidth - 60);
-            const y = Math.random() * (window.innerHeight - 150) + 80;
-            
-            task.style.left = x + 'px';
-            task.style.top = y + 'px';
+       function createTask() {
+    const task = document.createElement('div');
+    task.className = 'task';
+    
+    // --- 修改这里：使用 img 标签代替文字 ---
+    const img = document.createElement('img');
+    img.src = 'boss.png'; // 确保图片路径正确
+    img.style.width = '100%';
+    img.style.height = '100%';
+    img.style.borderRadius = '12px'; // 保持和圆角一致
+    task.appendChild(img);
+    // ------------------------------------
 
-            task.onclick = () => {
-                score += 10;
-                scoreEl.textContent = score;
-                task.remove();
-                if (window.navigator.vibrate) window.navigator.vibrate(20);
-            };
+    const x = Math.random() * (window.innerWidth - 60);
+    const y = Math.random() * (window.innerHeight - 150) + 80;
+    
+    task.style.left = x + 'px';
+    task.style.top = y + 'px';
 
-            document.body.appendChild(task);
+    task.onclick = () => {
+        score += 10;
+        scoreEl.textContent = score;
+        task.remove();
+        if (window.navigator.vibrate) window.navigator.vibrate(20);
+    };
 
-            // 2秒后自动消失
-            setTimeout(() => {
-                if (task.parentNode) {
-                    task.remove();
-                }
-            }, 2000);
-        }
+    document.body.appendChild(task);
+
+    setTimeout(() => {
+        if (task.parentNode) task.remove();
+    }, 2000);
+}
 
         // 每隔 800ms 产生一个任务
         setInterval(createTask, 800);
