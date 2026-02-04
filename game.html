@@ -59,15 +59,15 @@
     <script>
         const scoreEl = document.getElementById('score');
         let score = 0;
-        const icons = ['📊', '📧', '⏰', '📅', '📝', '📞'];
+        const images = ['task1.png', 'task2.png', 'task3.png','task4.png','task5.png','task6.png','task7.png'];
 
-       function createTask() {
+    function createTask() {
     const task = document.createElement('div');
     task.className = 'task';
     
     // --- 修改这里：使用 img 标签代替文字 ---
     const img = document.createElement('img');
-    img.src = 'boss.png'; // 确保图片路径正确
+    img.src = images[Math.floor(Math.random() * images.length)];
     img.style.width = '100%';
     img.style.height = '100%';
     img.style.borderRadius = '12px'; // 保持和圆角一致
