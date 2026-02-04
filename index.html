@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>下班倒计时</title>
+    <style>
+        :root {
+            --bg-color: #f7f9fc;
+            --card-bg: rgba(255, 255, 255, 0.9);
+            --primary-color: #2575fc;
+            --accent-color: #ff4757;
+            --text-color: #2f3542;
+            --safe-area-bottom: env(safe-area-inset-bottom);
+        }
+
+        * {
+            -webkit-tap-highlight-color: transparent; /* 移除移动端点击高亮 */
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+            background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
+            color: var(--text-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+            transition: all 0.5s ease;
+        }
+
+        /* 下班后的喜庆样式 */
+        body.freedom {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        }
+
+        .container {
+            background-color: var(--card-bg);
+            padding: 2.5rem 1.5rem;
+            border-radius: 30px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+            text-align: center;
+            width: 85%;
+            max-width: 400px;
+            backdrop-filter: blur(10px); /* 毛玻璃效果 */
+            border: 1px solid rgba(255,255,255,0.3);
+        }
+
+        h1 {
+            font-size: 1.1rem;
+            font-weight: 500;
+            color: #747d8c;
+            margin: 0 0 0.5rem 0;
+            letter-spacing: 1px;
+        }
+
+        .timer-display {
+            font-size: 3.8rem;
+            font-weight: 800;
+            font-variant-numeric: tabular-nums;
+            color: var(--primary-color);
+            margin: 15px 0;
+            text-shadow: 0 4px 10px rgba(37, 117, 252, 0.2);
+        }
+
+        .status-message {
+            margin-top: 10px;
+            font-size: 1.1rem;
+            min-height: 1.6em;
+            color: var(--accent-color);
+            font-weight: 600;
+        }
+
+        .input-group {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .input-label {
+            font-size: 0.85rem;
+            color: #a4b0be;
+        }
+
+        input[type="time"] {
+            border: 2px solid #f1f2f6;
+            border-radius: 12px;
+            padding: 12px 20px;
+            font-size: 1.2rem;
+            color: var(--text-color);
+            outline: none;
+            background: #f1f2f6;
+            width: 100%;
+            max-width: 200px;
+            text-align: center;
+            -webkit-appearance: none; /* 统一 iOS 样式 */
+        }
+
+        /* 移动端振动提示感官优化 */
+        input[type="time"]:focus {
+            border-color: var(--primary-color);
+            background: #fff;
+        }
+
+        /* 底部版权或装饰 */
+        .footer {
+            position: absolute;
+            bottom: calc(20px + var(--safe-area-bottom));
+            color: rgba(255,255,255,0.7);
+            font-size: 0.8rem;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>距离下班还有</h1>
+        <div class="timer-display" id="timer">00:00:00</div>
+        <div class="status-message" id="message"></div>
+
+        <div class="input-group">
+            <span class="input-label">设置目标时间</span>
+            <input type="time" id="endTime" value="18:00">
+        </div>
+    </div>
+
+    <div class="footer">准点开溜</div>
+
+    <script>
+        const timerElement = document.getElementById('timer');
+        const endTimeInput = document.getElementById('endTime');
+        const messageElement = document.getElementById('message');
+        const bodyElement = document.body;
+
+        // 加载本地配置
+        const savedTime = localStorage.getItem('offWorkTime_mobile');
+        if (savedTime) {
+            endTimeInput.value = savedTime;
+        }
+
+        function updateTimer() {
+            const now = new Date();
+            const [hours, minutes] = endTimeInput.value.split(':').map(Number);
+            
+            const targetDate = new Date();
+            targetDate.setHours(hours, minutes, 0, 0);
+
+            let diff = targetDate - now;
+
+            if (diff <= 0) {
+                timerElement.textContent = "00:00:00";
+                messageElement.textContent = "✨ 立刻滚蛋！";
+                bodyElement.classList.add('freedom');
+                document.title = "下班！";
+                return;
+            }
+
+            bodyElement.classList.remove('freedom');
+            messageElement.textContent = "";
+
+            const h = Math.floor(diff / (1000 * 60 * 60));
+            const m = Math.floor((diff / (1000 * 60)) % 60);
+            const s = Math.floor((diff / 1000) % 60);
+
+            const formattedTime = [h, m, s].map(v => v.toString().padStart(2, '0')).join(':');
+
+            timerElement.textContent = formattedTime;
+            document.title = `${formattedTime} 下班`;
+        }
+
+        endTimeInput.addEventListener('change', () => {
+            localStorage.setItem('offWorkTime_mobile', endTimeInput.value);
+            // 手机端切换时间后给予简单的触觉反馈模拟（如果支持）
+            if (window.navigator.vibrate) {
+                window.navigator.vibrate(10);
+            }
+            updateTimer();
+        });
+
+        setInterval(updateTimer, 1000);
+        updateTimer();
+    </script>
+</body>
+</html>
