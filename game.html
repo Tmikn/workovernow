@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>game</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: #2c3e50;
+            font-family: sans-serif;
+            color: white;
+            text-align: center;
+        }
+        #game-info {
+            padding: 20px;
+            font-size: 1.2rem;
+        }
+        .task {
+            position: absolute;
+            width: 60px;
+            height: 60px;
+            background: #e74c3c;
+            border-radius: 12px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 2rem;
+            cursor: pointer;
+            user-select: none;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            transition: transform 0.1s;
+        }
+        .task:active { transform: scale(0.8); }
+        #back-btn {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 10px 20px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 20px;
+            color: white;
+            text-decoration: none;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-info">
+        <div>得分: <span id="score">0</span></div>
+        <div style="font-size: 0.8rem; color: #bdc3c7;">点击消除弹出的“工作任务”！</div>
+    </div>
+
+    <a href="index.html" id="back-btn">不想玩了，回去看倒计时</a>
+
+    <script>
+        const scoreEl = document.getElementById('score');
+        let score = 0;
+        const icons = ['📊', '📧', '⏰', '📅', '📝', '📞'];
+
+        function createTask() {
+            const task = document.createElement('div');
+            task.className = 'task';
+            task.innerHTML = icons[Math.floor(Math.random() * icons.length)];
+            
+            // 随机位置
+            const x = Math.random() * (window.innerWidth - 60);
+            const y = Math.random() * (window.innerHeight - 150) + 80;
+            
+            task.style.left = x + 'px';
+            task.style.top = y + 'px';
+
+            task.onclick = () => {
+                score += 10;
+                scoreEl.textContent = score;
+                task.remove();
+                if (window.navigator.vibrate) window.navigator.vibrate(20);
+            };
+
+            document.body.appendChild(task);
+
+            // 2秒后自动消失
+            setTimeout(() => {
+                if (task.parentNode) {
+                    task.remove();
+                }
+            }, 2000);
+        }
+
+        // 每隔 800ms 产生一个任务
+        setInterval(createTask, 800);
+    </script>
+</body>
+</html>
