@@ -191,7 +191,7 @@
                 friction: 0.1,
                 frictionAir: 0.05, // 增加空气阻力，让它不按键时容易停下
                 restitution: 0.2, // 弹性
-                density: 0.005, // 密度，影响重量
+                density: 0.02, // 密度，影响重量
             });
 
             // 初始位置
@@ -208,7 +208,7 @@
             if (ball) Composite.remove(world, ball);
             
             ball = Bodies.circle(width * 0.5, height * 0.5, 18, {
-                restitution: 1.1, // 高弹性
+                restitution: 1.6, // 高弹性
                 friction: 0.005,
                 density: 0.004,
                 render: {
