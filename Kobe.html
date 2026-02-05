@@ -173,19 +173,19 @@
         function createPlayer() {
             // 头部 (圆形)
             const headRadius = 20;
-            const head = Bodies.circle(0, -35, headRadius, {
+            const head = Bodies.circle(0, -25, headRadius, {
                 render: { fillStyle: headColor }
             });
 
             // 身体 (倒三角形)
             // Matter.js 的 polygon 默认是正多边形，我们需要调整顶点让它看起来像个倒三角
             // 这里用梯形模拟稍微好控制一点，或者直接用三角形
-            const bodyPart = Bodies.polygon(0, 10, 3, 40, {
-                render: { fillStyle: bodyColor },
-                angle: (Math.PI/2) // 旋转180度，让它倒过来
+            const bodyPart = Bodies.trapezoid(0, 15, 50, 60, 1, {
+                render: { fillStyle: '#9B409E' },
+                angle: Math.PI // 旋转180度，让尖角朝下
             });
             
-            // 组合起来
+            // 组合起来 
             const player = Body.create({
                 parts: [head, bodyPart],
                 friction: 0.1,
@@ -196,6 +196,10 @@
 
             // 初始位置
             Body.setPosition(player, { x: width * 0.2, y: height - 100 });
+
+            // 初始状态强制垂直，防止一出生就倒了
+            Body.setAngle(player, 0);
+
             return player;
         }
 
@@ -332,11 +336,11 @@
             
             // 保持玩家大致直立 (如果不按旋转键) - 这是一个可选的辅助功能
             // 如果你想增加难度，可以注释掉下面这段
-            /*
+            
             if (!keys.rotLeft && !keys.rotRight) {
                  Body.setAngularVelocity(player, player.angularVelocity * 0.9);
             }
-            */
+            
 
             // 检查球是否出界 (重置)
             if (ball.position.y > height + 100 || ball.position.x > width + 100 || ball.position.x < -100) {
