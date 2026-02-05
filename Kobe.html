@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>物理投篮挑战</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden; /* 禁止滚动 */
+            background-color: #f0f2f5;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            touch-action: none; /* 禁止默认触摸行为 */
+        }
+
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        /* 计分板 */
+        #score-board {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            font-size: 24px;
+            font-weight: bold;
+            color: #333;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 10px 20px;
+            border-radius: 10px;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        /* 手机端控制按钮区域 */
+        #controls {
+            position: absolute;
+            bottom: 20px;
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            padding: 0 20px;
+            box-sizing: border-box;
+            z-index: 10;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 15px;
+        }
+
+        .ctrl-btn {
+            width: 60px;
+            height: 60px;
+            background: rgba(0, 0, 0, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            border-radius: 50%;
+            color: white;
+            font-size: 24px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            user-select: none;
+            cursor: pointer;
+            backdrop-filter: blur(4px);
+        }
+
+        .ctrl-btn:active, .ctrl-btn.active {
+            background: rgba(0, 0, 0, 0.5);
+            transform: scale(0.95);
+        }
+
+        /* 提示层 */
+        #tutorial {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: rgba(0,0,0,0.3);
+            text-align: center;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <div id="score-board">得分: <span id="score">0</span></div>
+        
+        <div id="tutorial">
+            电脑：方向键 ← → 移动，Z / X 旋转<br>
+            手机：使用下方按钮
+        </div>
+
+        <div id="controls">
+            <div class="btn-group">
+                <div class="ctrl-btn" id="btn-left">←</div>
+                <div class="ctrl-btn" id="btn-right">→</div>
+            </div>
+            <div class="btn-group">
+                <div class="ctrl-btn" id="btn-rot-left">↺</div>
+                <div class="ctrl-btn" id="btn-rot-right">↻</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 1. 物理引擎初始化
+        const Engine = Matter.Engine,
+              Render = Matter.Render,
+              Runner = Matter.Runner,
+              Bodies = Matter.Bodies,
+              Body = Matter.Body,
+              Composite = Matter.Composite,
+              Events = Matter.Events,
+              Vector = Matter.Vector;
+
+        // 创建引擎
+        const engine = Engine.create();
+        const world = engine.world;
+
+        // 获取容器宽高
+        const container = document.getElementById('game-container');
+        let width = container.clientWidth;
+        let height = container.clientHeight;
+
+        // 创建渲染器
+        const render = Render.create({
+            element: container,
+            engine: engine,
+            options: {
+                width: width,
+                height: height,
+                wireframes: false, // 关闭线框模式，显示颜色
+                background: '#f0f2f5'
+            }
+        });
+
+        // 2. 创建游戏物体
+
+        // --- 墙壁 ---
+        const wallOptions = { isStatic: true, render: { fillStyle: '#999' } };
+        const ground = Bodies.rectangle(width / 2, height + 50, width, 100, wallOptions);
+        const leftWall = Bodies.rectangle(-50, height / 2, 100, height * 2, wallOptions);
+        const rightWall = Bodies.rectangle(width + 50, height / 2, 100, height * 2, wallOptions);
+        Composite.add(world, [ground, leftWall, rightWall]);
+
+        // --- 玩家 (组合刚体) ---
+        // 颜色提取自用户上传图片
+        const headColor = '#A86A4B'; // 褐色
+        const bodyColor = '#9B409E'; // 紫色
+
+        function createPlayer() {
+            // 头部 (圆形)
+            const headRadius = 20;
+            const head = Bodies.circle(0, -35, headRadius, {
+                render: { fillStyle: headColor }
+            });
+
+            // 身体 (倒三角形)
+            // Matter.js 的 polygon 默认是正多边形，我们需要调整顶点让它看起来像个倒三角
+            // 这里用梯形模拟稍微好控制一点，或者直接用三角形
+            const bodyPart = Bodies.polygon(0, 40, 3, 10, {
+                render: { fillStyle: bodyColor },
+                angle: (Math.PI/2) // 旋转180度，让它倒过来
+            });
+            
+            // 组合起来
+            const player = Body.create({
+                parts: [head, bodyPart],
+                friction: 0.1,
+                frictionAir: 0.05, // 增加空气阻力，让它不按键时容易停下
+                restitution: 0.2, // 弹性
+                density: 0.005, // 密度，影响重量
+            });
+
+            // 初始位置
+            Body.setPosition(player, { x: width * 0.2, y: height - 100 });
+            return player;
+        }
+
+        const player = createPlayer();
+        Composite.add(world, player);
+
+        // --- 篮球 ---
+        let ball;
+        function createBall() {
+            if (ball) Composite.remove(world, ball);
+            
+            ball = Bodies.circle(width * 0.5, height * 0.5, 18, {
+                restitution: 0.9, // 高弹性
+                friction: 0.005,
+                density: 0.004,
+                render: {
+                    fillStyle: '#e67e22',
+                    strokeStyle: '#d35400',
+                    lineWidth: 3
+                },
+                label: 'ball'
+            });
+            Composite.add(world, ball);
+        }
+        createBall();
+
+        // --- 篮筐系统 ---
+        let score = 0;
+        const scoreEl = document.getElementById('score');
+
+        // 篮筐位置
+        const hoopX = width * 0.85;
+        const hoopY = height * 0.4;
+
+        function createHoop() {
+            const rimColor = '#e74c3c';
+            
+            // 篮板
+            const backboard = Bodies.rectangle(hoopX + 40, hoopY - 40, 10, 100, {
+                isStatic: true,
+                render: { fillStyle: '#ecf0f1' }
+            });
+
+            // 篮筐左边缘 (实体)
+            const rimLeft = Bodies.circle(hoopX - 35, hoopY, 3, {
+                isStatic: true,
+                render: { fillStyle: rimColor }
+            });
+
+            // 篮筐右边缘 (实体)
+            const rimRight = Bodies.circle(hoopX + 25, hoopY, 3, {
+                isStatic: true,
+                render: { fillStyle: rimColor }
+            });
+
+            // 篮网感应器 (不可见，用于检测进球)
+            const netSensor = Bodies.rectangle(hoopX - 5, hoopY + 20, 40, 10, {
+                isStatic: true,
+                isSensor: true, // 传感器：只检测碰撞，不产生物理反应
+                render: { visible: false }, // 调试时设为 true 可见
+                label: 'sensor'
+            });
+
+            Composite.add(world, [backboard, rimLeft, rimRight, netSensor]);
+        }
+        createHoop();
+
+        // 3. 交互逻辑
+
+        // 输入状态
+        const keys = {
+            left: false,
+            right: false,
+            rotLeft: false,
+            rotRight: false
+        };
+
+        // 键盘监听
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowLeft') keys.left = true;
+            if (e.key === 'ArrowRight') keys.right = true;
+            if (e.key === 'ArrowUp' || e.key === 'z' || e.key === 'Z') keys.rotLeft = true;
+            if (e.key === 'ArrowDown' || e.key === 'x' || e.key === 'X') keys.rotRight = true;
+        });
+
+        window.addEventListener('keyup', (e) => {
+            if (e.key === 'ArrowLeft') keys.left = false;
+            if (e.key === 'ArrowRight') keys.right = false;
+            if (e.key === 'ArrowUp' || e.key === 'z' || e.key === 'Z') keys.rotLeft = false;
+            if (e.key === 'ArrowDown' || e.key === 'x' || e.key === 'X') keys.rotRight = false;
+        });
+
+        // 触摸按钮监听
+        function setupTouch(id, keyName) {
+            const btn = document.getElementById(id);
+            btn.addEventListener('touchstart', (e) => { e.preventDefault(); keys[keyName] = true; btn.classList.add('active'); });
+            btn.addEventListener('touchend', (e) => { e.preventDefault(); keys[keyName] = false; btn.classList.remove('active'); });
+            // 兼容鼠标点击测试
+            btn.addEventListener('mousedown', () => { keys[keyName] = true; btn.classList.add('active'); });
+            btn.addEventListener('mouseup', () => { keys[keyName] = false; btn.classList.remove('active'); });
+        }
+
+        setupTouch('btn-left', 'left');
+        setupTouch('btn-right', 'right');
+        setupTouch('btn-rot-left', 'rotLeft');
+        setupTouch('btn-rot-right', 'rotRight');
+
+        // 游戏循环逻辑
+        Events.on(engine, 'beforeUpdate', () => {
+            // 移动力度
+            const moveForce = 0.002;
+            const rotSpeed = 0.15;
+
+            // 左右移动 (直接施加水平力)
+            if (keys.left) {
+                Body.applyForce(player, player.position, { x: -moveForce, y: 0 });
+            }
+            if (keys.right) {
+                Body.applyForce(player, player.position, { x: moveForce, y: 0 });
+            }
+
+            // 旋转控制 (直接设置角速度，手感更直接)
+            if (keys.rotLeft) {
+                Body.setAngularVelocity(player, -rotSpeed);
+            } else if (keys.rotRight) {
+                Body.setAngularVelocity(player, rotSpeed);
+            }
+
+            // 限制玩家不要飞太高
+            if (player.position.y < 0) {
+                Body.setPosition(player, { x: player.position.x, y: 0 });
+                Body.setVelocity(player, { x: player.velocity.x, y: 0 });
+            }
+            
+            // 保持玩家大致直立 (如果不按旋转键) - 这是一个可选的辅助功能
+            // 如果你想增加难度，可以注释掉下面这段
+            /*
+            if (!keys.rotLeft && !keys.rotRight) {
+                 Body.setAngularVelocity(player, player.angularVelocity * 0.9);
+            }
+            */
+
+            // 检查球是否出界 (重置)
+            if (ball.position.y > height + 100 || ball.position.x > width + 100 || ball.position.x < -100) {
+                // 延迟重置
+                createBall();
+            }
+        });
+
+        // 碰撞检测 (得分)
+        Events.on(engine, 'collisionStart', (event) => {
+            const pairs = event.pairs;
+
+            for (let i = 0; i < pairs.length; i++) {
+                const bodyA = pairs[i].bodyA;
+                const bodyB = pairs[i].bodyB;
+
+                // 检查是否是 球 和 传感器 的碰撞
+                if ((bodyA.label === 'ball' && bodyB.label === 'sensor') || 
+                    (bodyB.label === 'ball' && bodyA.label === 'sensor')) {
+                    
+                    // 简单的防抖动，防止一次进球算多次分（通过检查垂直速度判断球是往下落）
+                    if (ball.velocity.y > 0) {
+                        score += 1;
+                        scoreEl.innerText = score;
+                        
+                        // 进球特效：球变绿
+                        ball.render.fillStyle = '#2ecc71';
+                        
+                        // 1秒后生成新球
+                        setTimeout(() => {
+                            createBall();
+                        }, 1000);
+                    }
+                }
+            }
+        });
+
+        // 启动引擎
+        Render.run(render);
+        const runner = Runner.create();
+        Runner.run(runner, engine);
+
+        // 窗口大小改变适配
+        window.addEventListener('resize', () => {
+            width = container.clientWidth;
+            height = container.clientHeight;
+            render.canvas.width = width;
+            render.canvas.height = height;
+            // 重新定位地面和墙壁 (简单起见，这里建议刷新页面，或者编写复杂的重定位逻辑)
+            location.reload(); 
+        });
+
+    </script>
+</body>
+</html>
