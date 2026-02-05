@@ -208,7 +208,7 @@
             if (ball) Composite.remove(world, ball);
             
             ball = Bodies.circle(width * 0.5, height * 0.5, 18, {
-                restitution: 2.0, // 高弹性
+                restitution: 0.9, // 高弹性
                 friction: 0.005,
                 density: 0.004,
                 render: {
