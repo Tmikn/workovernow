@@ -34,9 +34,49 @@
             background: rgba(255, 255, 255, 0.8);
             padding: 10px 20px;
             border-radius: 10px;
+            z-index: 100; /* 确保在最前面 */
             pointer-events: auto;
             cursor: pointer;
-            z-index: 10;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            transition: all 0.2s ease;
+            border: 2px solid transparent;
+        }
+
+        /* 呼吸灯边框效果 */
+        #score-board {
+            animation: board-glow 2s infinite;
+        }
+
+        @keyframes board-glow {
+            0% { border-color: rgba(155, 64, 158, 0.2); box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+            50% { border-color: rgba(155, 64, 158, 0.8); box-shadow: 0 4px 20px rgba(155, 64, 158, 0.4); }
+            100% { border-color: rgba(155, 64, 158, 0.2); box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        }
+
+        /* 小提示文字样式 */
+        .score-tip {
+            font-size: 10px;
+            color: #9B409E; /* 使用你角色的紫色 */
+            font-weight: normal;
+            margin-top: 2px;
+            text-align: center;
+            opacity: 0.8;
+            animation: bounce 2s infinite;
+        }
+
+        @keyframes bounce {
+            0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
+            40% { transform: translateY(-3px); }
+            60% { transform: translateY(-1px); }
+        }
+
+        /* 手机端适配：稍微缩小一点防止挡住投篮 */
+        @media (max-width: 600px) {
+            #score-board {
+                padding: 8px 15px;
+                font-size: 18px;
+            }
+            .score-tip { font-size: 9px; }
         }
 
         /* 手机端控制按钮区域 */
@@ -132,7 +172,9 @@
 <body>
 
     <div id="game-container">
-        <div id="score-board">得分: <span id="score">0</span></div>
+        <div id="score-board">得分: <span id="score">0</span>
+        <div class="score-tip">点击查看排行榜 🏆</div>
+        </div>
         
         <div id="tutorial">
             电脑：方向键 ← → 移动，Z / X 旋转<br>
@@ -456,7 +498,7 @@
         // 2. 加载排行榜
         async function loadRank() {
             const listDiv = document.getElementById('rank-list');
-            listDiv.innerHTML = "<div style='text-align:center'>正在读取摸鱼记录...</div>";
+            listDiv.innerHTML = "<div style='text-align:center'>黑曼巴祈祷中...</div>";
 
             const { data, error } = await _supabase
                 .from('Leaderboard')
@@ -489,7 +531,7 @@
         async function submitScore() {
             const nameInput = document.getElementById('player-name');
             const name = nameInput.value.trim();
-            if (!name) return alert("请输入大名！");
+            if (!name) return alert("请输入ID");
 
             const btn = document.querySelector('#submit-area button');
             btn.disabled = true;
@@ -500,11 +542,11 @@
                 .insert([{ username: name, score: score }]);
 
             if (error) {
-                alert("提交失败，可能数据库没连上");
+                alert("数据库链接失败");
                 btn.disabled = false;
                 btn.innerText = "重试";
             } else {
-                alert("上榜成功！");
+                alert("排行榜已更新");
                 nameInput.value = ""; // 清空输入框
                 document.getElementById('submit-area').style.display = 'none';
                 loadRank();
