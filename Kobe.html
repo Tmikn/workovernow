@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>黑曼巴传奇</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         body, html {
             margin: 0;
@@ -33,7 +34,8 @@
             background: rgba(255, 255, 255, 0.8);
             padding: 10px 20px;
             border-radius: 10px;
-            pointer-events: none;
+            pointer-events: auto;
+            cursor: pointer;
             z-index: 10;
         }
 
@@ -67,7 +69,15 @@
             justify-content: center;
             align-items: center;
             backdrop-filter: blur(8px);
-            -webkit-user-select: none; /* 防止长按弹出菜单 */
+            
+             /* --- 核心兼容性属性 --- */
+            -webkit-user-select: none;  /* Safari, Chrome, Opera */
+            -moz-user-select: none;     /* Firefox */
+            -ms-user-select: none;      /* Internet Explorer/Edge (旧版) */
+            user-select: none;          /* 标准属性 (现代浏览器) */
+            
+            /* 额外保险：防止移动端长按弹出系统菜单 */
+            -webkit-touch-callout: none;
         }
 
         .ctrl-btn:active, .ctrl-btn.active {
@@ -100,6 +110,23 @@
             text-align: center;
             pointer-events: none;
         }
+
+        /* 排行 */
+        #rank-modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8); z-index: 100000;
+            display: flex; justify-content: center; align-items: center;
+            color: #333;
+        }
+        .rank-content {
+            background: white; padding: 20px; border-radius: 20px;
+            width: 85%; max-width: 320px; text-align: center;
+        }
+        #rank-list { text-align: left; margin: 15px 0; max-height: 200px; overflow-y: auto; }
+        .rank-item { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid #eee; }
+        #player-name { padding: 8px; width: 60%; border-radius: 5px; border: 1px solid #ccc; }
+        .close-btn { margin-top: 15px; background: #eee; border: none; padding: 8px 20px; border-radius: 10px; }
+
     </style>
 </head>
 <body>
@@ -121,6 +148,22 @@
                 <div class="ctrl-btn" id="btn-rot-left">↺</div>
                 <div class="ctrl-btn" id="btn-rot-right">↻</div>
             </div>
+        </div>
+    </div>
+
+    <div id="rank-modal" style="display: none;">
+        <div class="rank-content">
+            <h3>🏆 排行榜</h3>
+            <div id="rank-list">加载中...</div>
+            
+            <div id="submit-area">
+                <hr>
+                <p>本次得分: <span id="final-score">0</span></p>
+                <input type="text" id="player-name" placeholder="输入你的大名" maxlength="10">
+                <button onclick="submitScore()">上榜</button>
+            </div>
+            
+            <button class="close-btn" onclick="closeRank()">返回游戏</button>
         </div>
     </div>
 
@@ -393,6 +436,90 @@
             location.reload(); 
         });
 
+        // 1. 初始化 Supabase (注意这里直接用 supabasejs 提供的 createClient)
+        const supabaseUrl = 'https://hnzrjedtrjxgdverackz.supabase.co';
+        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhuenJqZWR0cmp4Z2R2ZXJhY2t6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAzMzQxNjIsImV4cCI6MjA4NTkxMDE2Mn0.ZK5y7uGXJ-nqednVzK7wL1GTxmA4DQSq34IcO88GcgQ';
+
+        // 这里的变量名建议改一下，避免和库名冲突
+        const _supabase = supabase.createClient(supabaseUrl, supabaseKey); 
+        // 或者如果是直接引入的 CDN，通常是：
+        // const _supabase = supabase.createClient(supabaseUrl, supabaseKey);
+
+
+        // 游戏结束或点击得分板时触发
+        function showRank() {
+            document.getElementById('rank-modal').style.display = 'flex';
+            document.getElementById('final-score').innerText = score;
+            loadRank();
+        }
+
+        // 2. 加载排行榜
+        async function loadRank() {
+            const listDiv = document.getElementById('rank-list');
+            listDiv.innerHTML = "<div style='text-align:center'>正在读取摸鱼记录...</div>";
+
+            const { data, error } = await _supabase
+                .from('Leaderboard')
+                .select('username, score')
+                .order('score', { ascending: false })
+                .limit(10);
+
+            if (error) {
+                listDiv.innerHTML = "<div style='color:red'>加载失败，请检查网络</div>";
+                console.error(error);
+                return;
+            }
+
+            let html = "";
+            if (data.length === 0) {
+                html = "<div style='text-align:center'>虚位以待，快来占领榜首！</div>";
+            } else {
+                data.forEach((item, index) => {
+                    let medal = index === 0 ? "🥇 " : index === 1 ? "🥈 " : index === 2 ? "🥉 " : (index + 1) + ". ";
+                    html += `<div class="rank-item">
+                        <span>${medal}${item.username}</span>
+                        <b>${item.score} 分</b>
+                    </div>`;
+                });
+            }
+            listDiv.innerHTML = html;
+        }
+
+        // 提交分数
+        async function submitScore() {
+            const nameInput = document.getElementById('player-name');
+            const name = nameInput.value.trim();
+            if (!name) return alert("请输入大名！");
+
+            const btn = document.querySelector('#submit-area button');
+            btn.disabled = true;
+            btn.innerText = "正在上榜...";
+
+            const { error } = await _supabase
+                .from('Leaderboard')
+                .insert([{ username: name, score: score }]);
+
+            if (error) {
+                alert("提交失败，可能数据库没连上");
+                btn.disabled = false;
+                btn.innerText = "重试";
+            } else {
+                alert("上榜成功！");
+                nameInput.value = ""; // 清空输入框
+                document.getElementById('submit-area').style.display = 'none';
+                loadRank();
+            }
+        }
+
+        function closeRank() {
+            document.getElementById('rank-modal').style.display = 'none';
+        }
+
+        // 修改你原来的得分点击事件，点击得分可以看排行
+        document.getElementById('score-board').onclick = showRank;
+
     </script>
+
+
 </body>
 </html>
