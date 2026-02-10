@@ -360,7 +360,7 @@
             right: false,
             rotLeft: false,
             rotRight: false
-        };
+        };  
 
         // 键盘监听
         window.addEventListener('keydown', (e) => {
@@ -398,6 +398,18 @@
             const moveForce = 0.01;
             const rotSpeed = 0.15;
 
+            // 1. 定义篮筐中心位置（和你创建篮筐时的坐标一致）
+            const hoopCenter = { x: hoopX - 5, y: hoopY }; 
+
+            // 2. 磁力参数
+            const attractionStrength = 0.001; // 吸力强度，不要调太大，否则会像磁铁一样吸死
+            const attractionRange = 80;       // 触发吸附的半径距离
+
+            // 3. 计算力
+            const dX = hoopCenter.x - ball.position.x;
+            const dY = hoopCenter.y - ball.position.y;
+            const distance = Math.sqrt(dX * dX + dY * dY);
+
             // 左右移动 (直接施加水平力)
             if (keys.left) {
                 Body.applyForce(player, player.position, { x: -moveForce, y: 0 });
@@ -431,6 +443,21 @@
             if (ball.position.y > height + 100 || ball.position.x > width + 100 || ball.position.x < -100) {
                 // 延迟重置
                 createBall();
+            }
+            
+            // 如果球在范围内，且球正在向下掉（增加手感，防止球从下面被吸上去）
+            if (distance < attractionRange && ball.velocity.y > 0) {
+                // 计算归一化的方向向量
+                const forceVector = {
+                    x: (dX / distance) * attractionStrength,
+                    y: (dY / distance) * attractionStrength
+                };
+                
+                // 给球施加力
+                Body.applyForce(ball, ball.position, forceVector);
+                
+                // (可选) 视觉反馈：吸附时球微微变色
+                // ball.render.strokeStyle = '#fff';
             }
         });
 
