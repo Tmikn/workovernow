@@ -3,252 +3,241 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>3D 摸鱼坦克大战</title>
+    <title>黑神话：坦克</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #1a1a1a; font-family: sans-serif; }
+        body { margin: 0; overflow: hidden; background: #0a0a0a; font-family: 'Courier New', Courier, monospace; }
         
         /* UI 层 */
         #ui {
             position: fixed; top: 20px; left: 20px; color: white;
-            pointer-events: none; text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
-            z-index: 100;
+            pointer-events: none; z-index: 100;
         }
-        .score-display { font-size: 24px; font-weight: bold; color: #9B409E; }
+        .score-display { font-size: 24px; font-weight: bold; color: #9B409E; text-shadow: 0 0 10px #9B409E; }
+        
+        /* 血条样式 */
+        .hp-container {
+            width: 200px; height: 12px; background: rgba(255, 0, 0, 0.2);
+            border: 2px solid #ff4444; margin-top: 10px; box-shadow: 0 0 15px rgba(255,0,0,0.3);
+        }
+        #hp-bar { width: 100%; height: 100%; background: #ff4444; transition: width 0.2s; }
+
+        /* 死亡结算界面 */
+        #overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.9); display: none;
+            flex-direction: column; justify-content: center; align-items: center;
+            color: #ff4444; z-index: 2000; text-align: center;
+        }
+        #overlay h1 { font-size: 50px; margin-bottom: 10px; text-shadow: 0 0 20px #ff0000; }
+        #overlay button { padding: 10px 30px; background: #9B409E; color: white; border: none; cursor: pointer; font-size: 18px; margin-top: 20px; }
 
         /* 移动端摇杆 */
         #joystick-container {
             position: fixed; bottom: 40px; left: 40px;
             width: 120px; height: 120px; z-index: 1000;
-            touch-action: none; display: none; /* 默认隐藏，JS检测移动端显示 */
+            touch-action: none; display: none;
         }
-        #joystick-base {
-            width: 100%; height: 100%; border-radius: 50%;
-            background: rgba(255,255,255,0.1); backdrop-filter: blur(5px);
-            border: 2px solid rgba(255,255,255,0.2);
-        }
-        #joystick-stick {
-            width: 50px; height: 50px; border-radius: 50%;
-            background: #9B409E; position: absolute;
-            top: 35px; left: 35px; transition: transform 0.1s ease-out;
-        }
-
-        /* 引导提示 */
-        #tutorial {
-            position: fixed; bottom: 20px; right: 20px; color: rgba(255,255,255,0.5);
-            font-size: 12px; text-align: right;
-        }
+        #joystick-base { width: 100%; height: 100%; border-radius: 50%; background: rgba(255,255,255,0.1); border: 2px solid rgba(255,255,255,0.3); }
+        #joystick-stick { width: 50px; height: 50px; border-radius: 50%; background: #9B409E; position: absolute; top: 35px; left: 35px; }
     </style>
 </head>
 <body>
 
     <div id="ui">
-        <div>击毁敌军: <span id="score-val" class="score-display">0</span></div>
-        <div style="font-size: 12px; opacity: 0.7;">点击屏幕射击 / WASD移动</div>
+        <div>数据碎片 (SCORE): <span id="score-val" class="score-display">0</span></div>
+        <div class="hp-container"><div id="hp-bar"></div></div>
+        <div style="font-size: 10px; color: #ff4444; margin-top: 4px;">SYSTEM INTEGRITY</div>
     </div>
 
     <div id="joystick-container">
         <div id="joystick-base"><div id="joystick-stick"></div></div>
     </div>
 
-    <div id="tutorial">基于 Three.js & Supabase</div>
+    <div id="overlay">
+        <h1>连接断开 (DEFEATED)</h1>
+        <p style="color: white;">您的最终战果: <span id="final-score">0</span></p>
+        <button onclick="submitAndReload()">上传数据并重启</button>
+    </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
     <script>
-        // --- 1. 配置与初始化 ---
+        // --- 1. 初始化 ---
         const supabaseUrl = 'https://hnzrjedtrjxgdverackz.supabase.co';
         const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhuenJqZWR0cmp4Z2R2ZXJhY2t6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAzMzQxNjIsImV4cCI6MjA4NTkxMDE2Mn0.ZK5y7uGXJ-nqednVzK7wL1GTxmA4DQSq34IcO88GcgQ';
         const _supabase = supabase.createClient(supabaseUrl, supabaseKey);
 
-        let score = 0;
-        const enemies = [];
-        const bullets = [];
-        const keys = {};
+        let score = 0, playerHP = 100, isDead = false;
+        const enemies = [], bullets = [], keys = {};
         let joystickData = { x: 0, y: 0, active: false };
 
-        // 场景基础
         const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x111111);
-        scene.fog = new THREE.Fog(0x111111, 20, 100);
-
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        scene.fog = new THREE.Fog(0x0a0a0a, 20, 120);
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.shadowMap.enabled = true;
         document.body.appendChild(renderer.domElement);
 
         // 灯光
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
-        scene.add(ambientLight);
-        const sunLight = new THREE.DirectionalLight(0xffffff, 0.8);
-        sunLight.position.set(10, 20, 10);
-        sunLight.castShadow = true;
-        scene.add(sunLight);
+        const ambient = new THREE.AmbientLight(0xffffff, 0.4);
+        scene.add(ambient);
+        const sun = new THREE.DirectionalLight(0xffffff, 0.8);
+        sun.position.set(5, 20, 10);
+        scene.add(sun);
 
         // 地面
-        const floor = new THREE.Mesh(
-            new THREE.PlaneGeometry(200, 200),
-            new THREE.MeshPhongMaterial({ color: 0x222222 })
-        );
-        floor.rotation.x = -Math.PI / 2;
-        floor.receiveShadow = true;
+        const floor = new THREE.Mesh(new THREE.PlaneGeometry(300, 300), new THREE.MeshPhongMaterial({ color: 0x111111 }));
+        floor.rotation.x = -Math.PI/2;
         scene.add(floor);
-        scene.add(new THREE.GridHelper(200, 40, 0x444444, 0x222222));
+        scene.add(new THREE.GridHelper(300, 50, 0x9B409E, 0x222222));
 
         // --- 2. 坦克工厂 ---
-        function createTank(color) {
+        function createTank(color, isPlayer = false) {
             const group = new THREE.Group();
-            // 底盘
-            const body = new THREE.Mesh(new THREE.BoxGeometry(2, 0.8, 2.5), new THREE.MeshPhongMaterial({ color }));
-            body.castShadow = true;
+            // 底盘 - 提高位置防止重叠
+            const body = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.8, 2.8), new THREE.MeshPhongMaterial({ color }));
+            body.position.y = 0.5;
             group.add(body);
             // 炮塔
-            const turret = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.6, 1.2), new THREE.MeshPhongMaterial({ color }));
-            turret.position.y = 0.7;
-            turret.castShadow = true;
+            const turret = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.6, 1.4), new THREE.MeshPhongMaterial({ color }));
+            turret.position.y = 1.2;
             group.add(turret);
             // 炮管
-            const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 2), new THREE.MeshPhongMaterial({ color: 0x333333 }));
-            barrel.rotation.x = Math.PI / 2;
-            barrel.position.set(0, 0.7, 1);
+            const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 2), new THREE.MeshPhongMaterial({ color: 0x333333 }));
+            barrel.rotation.x = Math.PI/2;
+            barrel.position.set(0, 1.2, 1);
             group.add(barrel);
             
+            group.userData = { radius: 1.8 }; // 碰撞半径
             scene.add(group);
             return group;
         }
 
-        const player = createTank(0x9B409E);
-        player.position.y = 0.4;
+        const player = createTank(0x9B409E, true);
 
-        // --- 3. 核心功能函数 ---
+        // --- 3. 核心逻辑 ---
         function fireBullet(owner, color) {
-            const bullet = new THREE.Mesh(new THREE.SphereGeometry(0.2), new THREE.MeshBasicMaterial({ color }));
-            bullet.position.copy(owner.position);
-            bullet.position.y = 1.1;
-            
-            const direction = new THREE.Vector3(0, 0, 1);
-            direction.applyQuaternion(owner.quaternion);
-            bullet.userData.velocity = direction.multiplyScalar(0.6);
-            bullet.userData.owner = owner === player ? 'player' : 'enemy';
-            
-            scene.add(bullet);
+            if (isDead) return;
+            const bullet = new THREE.Mesh(new THREE.SphereGeometry(0.25), new THREE.MeshBasicMaterial({ color }));
+            bullet.position.copy(owner.position).add(new THREE.Vector3(0, 1.2, 0));
+            const dir = new THREE.Vector3(0, 0, 1).applyQuaternion(owner.quaternion);
+            bullet.userData = { velocity: dir.multiplyScalar(0.7), owner: owner === player ? 'p' : 'e' };
             bullets.push(bullet);
+            scene.add(bullet);
+        }
+
+        function checkTankCollision(a, b) {
+            const dist = a.position.distanceTo(b.position);
+            const minDist = a.userData.radius + b.userData.radius;
+            if (dist < minDist) {
+                const normal = new THREE.Vector3().subVectors(a.position, b.position).normalize();
+                const push = normal.multiplyScalar((minDist - dist) * 0.5);
+                a.position.add(push);
+                b.position.sub(push);
+                return true;
+            }
+            return false;
         }
 
         function spawnEnemy() {
-            if (enemies.length > 5) return;
+            if (enemies.length > 6 || isDead) return;
             const enemy = createTank(0xff4444);
-            enemy.position.set(Math.random() * 60 - 30, 0.4, Math.random() * 60 - 30);
-            enemy.userData = { lastFire: Date.now(), hp: 2 };
+            enemy.position.set(Math.random()*80-40, 0, Math.random()*80-40);
+            enemy.userData.lastFire = Date.now();
+            enemy.userData.radius = 1.8;
             enemies.push(enemy);
         }
 
-        // --- 4. 控制逻辑 ---
-        if ('ontouchstart' in window) {
-            document.getElementById('joystick-container').style.display = 'block';
+        async function submitAndReload() {
+            const name = prompt("请输入ID", "Charname");
+            if (name) {
+                await _supabase.from('Leaderboard').insert([{ username: name, score: score }]);
+            }
+            location.reload();
         }
 
-        window.addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
-        window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
-        window.addEventListener('mousedown', (e) => { if(e.button === 0) fireBullet(player, 0xffff00); });
-
-        // 摇杆逻辑
-        const stick = document.getElementById('joystick-stick');
-        document.getElementById('joystick-container').addEventListener('touchstart', e => {
-            joystickData.active = true;
-            updateJoystick(e.touches[0]);
-        });
-        window.addEventListener('touchmove', e => {
-            if (joystickData.active) updateJoystick(e.touches[0]);
-        });
-        window.addEventListener('touchend', () => {
-            joystickData.active = false;
-            joystickData.x = 0; joystickData.y = 0;
-            stick.style.transform = `translate(0,0)`;
-        });
-
-        function updateJoystick(touch) {
-            const base = document.getElementById('joystick-base').getBoundingClientRect();
-            const centerX = base.left + base.width/2;
-            const centerY = base.top + base.height/2;
-            let dx = touch.clientX - centerX;
-            let dy = touch.clientY - centerY;
-            const dist = Math.min(Math.sqrt(dx*dx + dy*dy), 50);
-            const angle = Math.atan2(dy, dx);
-            stick.style.transform = `translate(${Math.cos(angle)*dist}px, ${Math.sin(angle)*dist}px)`;
-            joystickData.x = (Math.cos(angle) * dist) / 50;
-            joystickData.y = (Math.sin(angle) * dist) / 50;
-        }
-
-        // --- 5. 游戏循环 ---
+        // --- 4. 游戏循环 ---
         function animate() {
+            if (isDead) return;
             requestAnimationFrame(animate);
 
-            // 玩家移动
-            if (keys['w']) player.translateZ(0.15);
-            if (keys['s']) player.translateZ(-0.15);
+            // 控制
+            if (keys['w']) player.translateZ(0.18);
+            if (keys['s']) player.translateZ(-0.18);
             if (keys['a']) player.rotation.y += 0.05;
             if (keys['d']) player.rotation.y -= 0.05;
-            
             if (joystickData.active) {
                 player.rotation.y -= joystickData.x * 0.05;
-                player.translateZ(-joystickData.y * 0.2);
+                player.translateZ(-joystickData.y * 0.22);
             }
 
-            // AI 逻辑
-            enemies.forEach((enemy, index) => {
-                const dist = enemy.position.distanceTo(player.position);
-                const dir = new THREE.Vector3().subVectors(player.position, enemy.position);
-                enemy.rotation.y = THREE.MathUtils.lerp(enemy.rotation.y, Math.atan2(dir.x, dir.z), 0.03);
-                
-                if (dist > 10) enemy.translateZ(0.06);
-                
-                if (Date.now() - enemy.userData.lastFire > 2500 && dist < 30) {
-                    fireBullet(enemy, 0xff0000);
-                    enemy.userData.lastFire = Date.now();
+            // AI 与 碰撞
+            enemies.forEach((en, i) => {
+                const dist = en.position.distanceTo(player.position);
+                const dir = new THREE.Vector3().subVectors(player.position, en.position);
+                en.rotation.y = THREE.MathUtils.lerp(en.rotation.y, Math.atan2(dir.x, dir.z), 0.04);
+                if (dist > 12) en.translateZ(0.08);
+                if (Date.now() - en.userData.lastFire > 2500 && dist < 40) {
+                    fireBullet(en, 0xff4444);
+                    en.userData.lastFire = Date.now();
                 }
+                checkTankCollision(player, en);
             });
 
-            // 子弹与碰撞
-            bullets.forEach((b, bIdx) => {
+            // 子弹
+            bullets.forEach((b, i) => {
                 b.position.add(b.userData.velocity);
-                
-                // 玩家子弹打敌人
-                if (b.userData.owner === 'player') {
-                    enemies.forEach((enemy, eIdx) => {
-                        if (b.position.distanceTo(enemy.position) < 1.8) {
-                            scene.remove(enemy);
-                            enemies.splice(eIdx, 1);
-                            scene.remove(b);
-                            bullets.splice(bIdx, 1);
-                            score++;
-                            document.getElementById('score-val').innerText = score;
+                if (b.userData.owner === 'p') {
+                    enemies.forEach((en, ei) => {
+                        if (b.position.distanceTo(en.position) < 2) {
+                            scene.remove(en); enemies.splice(ei, 1);
+                            scene.remove(b); bullets.splice(i, 1);
+                            score++; document.getElementById('score-val').innerText = score;
                         }
                     });
-                }
-                
-                if (b.position.length() > 100) {
-                    scene.remove(b);
-                    bullets.splice(bIdx, 1);
+                } else if (b.position.distanceTo(player.position) < 2) {
+                    playerHP -= 20;
+                    document.getElementById('hp-bar').style.width = playerHP + "%";
+                    scene.remove(b); bullets.splice(i, 1);
+                    if (playerHP <= 0) {
+                        isDead = true;
+                        document.getElementById('overlay').style.display = 'flex';
+                        document.getElementById('final-score').innerText = score;
+                    }
                 }
             });
 
-            // 相机跟随
-            const camOffset = new THREE.Vector3(0, 12, -18).applyQuaternion(player.quaternion);
+            const camOffset = new THREE.Vector3(0, 15, -20).applyQuaternion(player.quaternion);
             camera.position.lerp(player.position.clone().add(camOffset), 0.1);
             camera.lookAt(player.position);
-
             renderer.render(scene, camera);
         }
 
-        // 启动
-        setInterval(spawnEnemy, 4000);
-        animate();
+        // --- 5. 事件绑定 ---
+        window.addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
+        window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
+        window.addEventListener('mousedown', () => fireBullet(player, 0x00ffff));
+        window.addEventListener('touchstart', (e) => { if(e.touches.length > 1 || !joystickData.active) fireBullet(player, 0x00ffff); });
 
+        if ('ontouchstart' in window) document.getElementById('joystick-container').style.display = 'block';
+        const stick = document.getElementById('joystick-stick');
+        document.getElementById('joystick-container').addEventListener('touchstart', () => joystickData.active = true);
+        window.addEventListener('touchmove', e => {
+            if (!joystickData.active) return;
+            const t = e.touches[0];
+            const base = document.getElementById('joystick-base').getBoundingClientRect();
+            const dx = t.clientX - (base.left + 60), dy = t.clientY - (base.top + 60);
+            const d = Math.min(Math.sqrt(dx*dx+dy*dy), 50), a = Math.atan2(dy, dx);
+            stick.style.transform = `translate(${Math.cos(a)*d}px, ${Math.sin(a)*d}px)`;
+            joystickData.x = (Math.cos(a)*d)/50; joystickData.y = (Math.sin(a)*d)/50;
+        });
+        window.addEventListener('touchend', () => { joystickData.active = false; stick.style.transform = 'translate(0,0)'; });
+
+        setInterval(spawnEnemy, 3500);
+        animate();
         window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
+            camera.aspect = window.innerWidth/window.innerHeight; camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
     </script>
