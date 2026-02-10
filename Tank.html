@@ -147,23 +147,42 @@
             }
         }
 
+        /** --- 修改后的坦克移动规则：AD转向，WS进退 --- **/
         function updateInputs() {
-            // 位移逻辑
-            let moveVec = new THREE.Vector3(0, 0, 0);
-            if (keys['w']) moveVec.z += 1;
-            if (keys['s']) moveVec.z -= 1;
-            if (keys['a']) moveVec.x += 1;
-            if (keys['d']) moveVec.x -= 1;
-            if (joyL.active) moveVec.set(-joyL.x, 0, -joyL.y);
-
-            if (moveVec.length() > 0) {
-                moveVec.normalize();
-                player.position.add(moveVec.clone().multiplyScalar(stats.moveSpeed));
-                const targetChassisRot = Math.atan2(moveVec.x, moveVec.z);
-                player.userData.chassis.rotation.y = THREE.MathUtils.lerp(player.userData.chassis.rotation.y, targetChassisRot, 0.1);
+            // 1. 底盘旋转控制 (A/D 键 或 左摇杆 X 轴)
+            let rotationDir = 0;
+            if (keys['a']) rotationDir += 1; // 左转
+            if (keys['d']) rotationDir -= 1; // 右转
+            
+            // 移动端适配：左摇杆水平偏移控制旋转速度
+            if (joyL.active) {
+                rotationDir = -joyL.x; 
             }
 
-            // 炮塔平滑转向核心
+            // 应用旋转：基于一个固定的转向速度
+            const turnSpeed = 0.045; 
+            player.userData.chassis.rotation.y += rotationDir * turnSpeed;
+
+            // 2. 底盘位移控制 (W/S 键 或 左摇杆 Y 轴)
+            let moveSpeed = 0;
+            if (keys['w']) moveSpeed += stats.moveSpeed; // 前进
+            if (keys['s']) moveSpeed -= stats.moveSpeed; // 后退
+
+            // 移动端适配：左摇杆垂直偏移控制进退
+            if (joyL.active) {
+                moveSpeed = -joyL.y * stats.moveSpeed;
+            }
+
+            if (moveSpeed !== 0) {
+                // 计算当前底盘朝向的向量
+                const direction = new THREE.Vector3(0, 0, 1);
+                direction.applyQuaternion(player.userData.chassis.quaternion);
+                
+                // 按朝向移动整个坦克模型
+                player.position.add(direction.multiplyScalar(moveSpeed));
+            }
+
+            // 3. 炮塔平滑转向核心 (保持不变：跟随鼠标或右摇杆)
             let targetTurretAngle = player.userData.turretGroup.rotation.y;
             if (joyR.active) {
                 targetTurretAngle = Math.atan2(-joyR.x, -joyR.y);
@@ -175,6 +194,7 @@
                     targetTurretAngle = Math.atan2(pt.x - player.position.x, pt.z - player.position.z);
                 }
             }
+            
             const targetQ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), targetTurretAngle);
             player.userData.turretGroup.quaternion.rotateTowards(targetQ, stats.turretSpeed);
         }
