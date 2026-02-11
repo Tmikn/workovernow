@@ -137,6 +137,21 @@
         let joyL = { x: 0, y: 0, active: false };
         let joyR = { x: 0, y: 0, active: false };
 
+        /** --- 强化版长方形辉光拖尾资源 --- **/
+        const trailParticles = [];
+        const trailGeo = new THREE.PlaneGeometry(2.0, 0.6); // 宽度设为2.0，刚好覆盖车尾灯宽度
+        trailGeo.rotateX(-Math.PI / 2); // 平铺地面
+
+        const trailMatBase = new THREE.MeshBasicMaterial({
+            color: 0x9B409E,      // 深红色核心
+            transparent: true,
+            opacity: 0.1,         // 初始透明度低一点，靠叠加产生辉光
+            blending: THREE.AdditiveBlending, // 核心：开启辉光叠加模式
+            depthWrite: false,    // 不写入深度缓冲区，防止方块边缘遮挡
+            side: THREE.DoubleSide
+        });
+
+
         /** --- 2. 场景构建 --- **/
         const scene = new THREE.Scene();
         scene.fog = new THREE.Fog(0x0a0a0a, 50, 200);
@@ -180,7 +195,7 @@
 
             // 2. 车头标识：探照灯 (位于 +Z 端)
             const lightGeo = new THREE.BoxGeometry(0.4, 0.2, 0.1);
-            const lightMat = new THREE.MeshBasicMaterial({ color: 0x00f2ff }); // 青色强光
+            const lightMat = new THREE.MeshBasicMaterial({ color: 0xffffff }); // 青色强光
             
             const leftLight = new THREE.Mesh(lightGeo, lightMat);
             leftLight.position.set(0.8, 0.6, 1.6);
@@ -192,23 +207,23 @@
 
             if (color === 0x9B409E) { 
                 // 左车灯点光源 (颜色, 强度, 距离)
-                const leftPointLight = new THREE.PointLight(0x00f2ff, 1.5, 12);
+                const leftPointLight = new THREE.PointLight(0xffffff, 1.5, 12);
                 leftPointLight.position.set(0.8, 0.6, 1.8);
                 chassis.add(leftPointLight);
 
                 // 右车灯点光源
-                const rightPointLight = new THREE.PointLight(0x00f2ff, 1.5, 12);
+                const rightPointLight = new THREE.PointLight(0xffffff, 1.5, 12);
                 rightPointLight.position.set(-0.8, 0.6, 1.8);
                 chassis.add(rightPointLight);
                 
                 // 可选：给车尾加一个微弱的红光感
-                const tailPointLight = new THREE.PointLight(0xff0000, 0.8, 5);
+                const tailPointLight = new THREE.PointLight(0x9B409E, 0.8, 5);
                 tailPointLight.position.set(0, 0.4, -1.8);
                 chassis.add(tailPointLight);
             }
 
             // 3. 车尾标识：尾灯与排气管 (位于 -Z 端)
-            const tailLightMat = new THREE.MeshBasicMaterial({ color: 0xff0000 }); // 红色尾灯
+            const tailLightMat = new THREE.MeshBasicMaterial({ color: 0x9B409E}); // 红色尾灯
             const tailLight = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.1, 0.1), tailLightMat);
             tailLight.position.set(0, 0.4, -1.6);
             chassis.add(tailLight);
@@ -310,18 +325,74 @@
             }
         }
 
+        
+        function spawnTrail() {
+            if (trailParticles.length > 40) return; // 限制数量防止过卡
+
+            const chassis = player.userData.chassis;
+            
+            // 位置设定在车尾正中心 (Z=-1.7)，高度略微离地 (Y=0.2)
+            const centerExhaustPos = new THREE.Vector3(0, 0.2, -1.7); 
+            chassis.localToWorld(centerExhaustPos);
+
+            const mat = trailMatBase.clone();
+            const p = new THREE.Mesh(trailGeo, mat);
+            
+            p.position.copy(centerExhaustPos);
+            // 让拖尾的旋转跟随底盘的旋转
+            p.quaternion.copy(chassis.getWorldQuaternion(new THREE.Quaternion()));
+            
+            p.userData = { life: 1.0 }; 
+            scene.add(p);
+            trailParticles.push(p);
+        }
+
+
         function animate() {
             if (!gameActive) return;
             requestAnimationFrame(animate);
 
             updateInputs();
 
+            // --- 1. 拖尾生成逻辑 ---
+            // 判断是否在前进 (按W 或 左摇杆向上推)
+            const isMovingForward = keys['w'] || (joyL.active && joyL.y < -0.2);
+            // 降低生成频率（每隔2帧生成一次），防止粒子过多导致卡顿
+            if (isMovingForward) {
+                spawnTrail();
+            }
+
+            // --- 2. 拖尾更新循环 ---
+            // 必须在渲染前处理粒子的生命周期
+            for (let i = trailParticles.length - 1; i >= 0; i--) {
+                const p = trailParticles[i];
+                p.userData.life -= 0.03; // 衰减速度
+
+                // 视觉进化逻辑：
+                p.material.opacity = p.userData.life * 0.2; // 基础透明度
+                
+                // 这种拉伸效果会让拖尾看起来像流动的光束
+                p.scale.z += 0.05; // 长度伸展
+                p.scale.x *= 0.98; // 宽度微弱收缩
+                
+                // 稍微向后方移动一点点，模拟惯性
+                const backward = new THREE.Vector3(0, 0, -0.1).applyQuaternion(p.quaternion);
+                p.position.add(backward);
+
+                if (p.userData.life <= 0) {
+                    scene.remove(p);
+                    p.material.dispose(); 
+                    trailParticles.splice(i, 1);
+                }
+            }
+
+            // --- 3. 自动开火逻辑 ---
             if (Date.now() - stats.lastFire > stats.fireRate) {
                 fireBullet(player, true);
                 stats.lastFire = Date.now();
             }
 
-            // 敌人 AI
+            // --- 4. 敌人 AI ---
             enemies.forEach(en => {
                 const dir = new THREE.Vector3().subVectors(player.position, en.position).normalize();
                 en.userData.chassis.rotation.y = Math.atan2(dir.x, dir.z);
@@ -333,7 +404,8 @@
                 }
             });
 
-            // 碰撞检测
+            // --- 5. 碰撞与战斗 (保持你原有的逻辑) ---
+            // ... 碰撞检测代码 ...
             const units = [player, ...enemies];
             for (let i = 0; i < units.length; i++) {
                 for (let j = i + 1; j < units.length; j++) {
@@ -347,19 +419,15 @@
                     }
                 }
             }
-            
-            //随机光源
-            if (player && gameActive) {
-            // 找到刚才添加的光源（假设你存到了 player.userData 里，或者通过遍历找）
+
+            // --- 6. 光源微闪效果 ---
             player.userData.chassis.children.forEach(child => {
-                if (child instanceof THREE.PointLight && child.color.getHex() === 0x00f2ff) {
-                    // 让亮度有极细微的闪烁，模拟引擎电流不稳的效果
-                    child.intensity = 1.4 + Math.random() * 0.2;
+                if (child instanceof THREE.PointLight && child.color.getHex() === 0xffffff) {
+                    child.intensity = 1.4 + Math.random() * 0.3;
                 }
             });
-        }
 
-            // 子弹处理
+            // --- 7. 子弹处理 ---
             for (let i = bullets.length - 1; i >= 0; i--) {
                 const b = bullets[i]; b.position.add(b.userData.velocity);
                 if (b.position.length() > 200) { scene.remove(b); bullets.splice(i, 1); continue; }
@@ -367,7 +435,6 @@
                 if (b.userData.owner === 'p') {
                     for (let j = enemies.length - 1; j >= 0; j--) {
                         if (b.position.distanceTo(enemies[j].position) < 2.2) {
-                            // --- 插入代码：播放击毁音效 ---
                             playSound(explodeSound);
                             scene.remove(enemies[j]); enemies.splice(j, 1);
                             scene.remove(b); bullets.splice(i, 1);
