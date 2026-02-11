@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <title>黑暗地牢风：美少女与D20判定</title>
+    <style>
+        body { background: #050505; color: #e0e0e0; display: flex; flex-direction: column; align-items: center; font-family: 'Palatino', serif; margin: 0; overflow: hidden; }
+        canvas { border: 2px solid #333; box-shadow: 0 0 50px #000; margin-top: 20px; image-rendering: pixelated; }
+        .instructions { margin-top: 15px; text-align: center; color: #888; line-height: 1.6; }
+        .highlight { color: #ff80bf; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <div class="instructions">
+        <span class="highlight">薇奥拉的审判</span><br>
+        [短点左键] 基础攻击 | [长按左键] 开启轮盘选招<br>
+        <small>D&D 系统：判定1=大失败，18-20=暴击</small>
+    </div>
+
+    <canvas id="gameCanvas" width="800" height="450"></canvas>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+// --- 游戏配置 ---
+const state = {
+    isWheelOpen: false,
+    holdTime: 0,
+    selectedSkill: -1,
+    shake: 0,
+    freeze: 0,
+    timeScale: 1,
+    msg: "等待战斗开始...",
+    msgColor: "#fff"
+};
+
+const skills = [
+    { name: "连枷重击", color: "#e74c3c", icon: "🔨", diceBonus: 2, dmg: 25 },
+    { name: "圣光惩戒", color: "#f1c40f", icon: "✨", diceBonus: 5, dmg: 15 },
+    { name: "铁壁架势", color: "#3498db", icon: "🛡️", diceBonus: 0, dmg: 5 },
+    { name: "鲜血祈祷", color: "#9b59b6", icon: "🍷", diceBonus: -2, dmg: 40 }
+];
+
+const player = { x: 200, y: 280, offset: 0, targetOffset: 0, color: "#ff80bf", state: "idle" };
+const boss = { x: 550, y: 220, hp: 100, maxHp: 100, shake: 0 };
+const particles = [];
+
+// --- 输入逻辑 ---
+let mouseDownTime = 0;
+canvas.addEventListener('mousedown', (e) => {
+    mouseDownTime = Date.now();
+    state.holdTimer = setTimeout(() => {
+        state.isWheelOpen = true;
+    }, 200);
+});
+
+canvas.addEventListener('mousemove', (e) => {
+    if (!state.isWheelOpen) return;
+    const rect = canvas.getBoundingClientRect();
+    updateWheelSelection(e.clientX - rect.left, e.clientY - rect.top);
+});
+
+window.addEventListener('mouseup', () => {
+    clearTimeout(state.holdTimer);
+    if (state.isWheelOpen) {
+        if (state.selectedSkill !== -1) executeAttack(skills[state.selectedSkill]);
+        state.isWheelOpen = false;
+    } else if (Date.now() - mouseDownTime < 200) {
+        executeAttack({ name: "基础挥砍", color: "#fff", diceBonus: 0, dmg: 10 });
+    }
+});
+
+// --- 战斗逻辑 ---
+function executeAttack(skill) {
+    if (player.state !== "idle") return;
+    
+    player.state = "attack";
+    const roll = Math.floor(Math.random() * 20) + 1;
+    const total = roll + skill.diceBonus;
+    
+    // 模拟暗黑地牢的前冲感
+    player.targetOffset = 80;
+
+    setTimeout(() => {
+        if (roll === 1) {
+            handleResult("大失败!", "#ff4444", 0, 5);
+        } else if (roll >= 18) {
+            handleResult(`暴击! (D20:${roll}+${skill.diceBonus})`, "#ff80bf", skill.dmg * 2, 20, true);
+        } else {
+            handleResult(`命中 (D20:${roll}+${skill.diceBonus})`, "#fff", skill.dmg, 8);
+        }
+        
+        setTimeout(() => {
+            player.targetOffset = 0;
+            player.state = "idle";
+        }, 150);
+    }, 100);
+}
+
+function handleResult(text, color, damage, shakePower, isCrit = false) {
+    state.msg = text;
+    state.msgColor = color;
+    state.shake = shakePower;
+    boss.hp = Math.max(0, boss.hp - damage);
+    if (isCrit) state.freeze = 12; // 卡肉感
+    
+    // 喷血粒子效果
+    for(let i=0; i<15; i++) {
+        particles.push({
+            x: boss.x + 60, y: boss.y + 80,
+            vx: (Math.random() - 0.5) * 15, vy: (Math.random() - 0.5) * 15,
+            life: 30, color: isCrit ? "#ff0080" : "#700"
+        });
+    }
+}
+
+function updateWheelSelection(mx, my) {
+    const cx = canvas.width / 2, cy = canvas.height / 2;
+    const dx = mx - cx, dy = my - cy;
+    if (Math.sqrt(dx*dx + dy*dy) < 40) { state.selectedSkill = -1; return; }
+    let angle = Math.atan2(dy, dx) + Math.PI / 2;
+    if (angle < 0) angle += Math.PI * 2;
+    state.selectedSkill = Math.floor(angle / (Math.PI * 2 / skills.length)) % skills.length;
+}
+
+// --- 渲染循环 ---
+function draw() {
+    if (state.freeze > 0) { state.freeze--; requestAnimationFrame(draw); return; }
+
+    ctx.fillStyle = "#111";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.save();
+    // 屏幕震动
+    if (state.shake > 0) {
+        ctx.translate((Math.random()-0.5)*state.shake, (Math.random()-0.5)*state.shake);
+        state.shake *= 0.8;
+    }
+
+    // 绘制地面
+    ctx.strokeStyle = "#333";
+    ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(0, 380); ctx.lineTo(800, 380); ctx.stroke();
+
+    // 绘制Boss (静态巨型黑影)
+    ctx.fillStyle = "#1a1a1a";
+    ctx.strokeStyle = "#444";
+    ctx.lineWidth = 3;
+    ctx.strokeRect(boss.x, boss.y, 140, 160);
+    ctx.fillRect(boss.x, boss.y, 140, 160);
+    // Boss 血条
+    ctx.fillStyle = "#200"; ctx.fillRect(boss.x, boss.y-40, 140, 8);
+    ctx.fillStyle = "#e74c3c"; ctx.fillRect(boss.x, boss.y-40, 140 * (boss.hp/100), 8);
+
+    // 绘制主角 (二次元美少女色块)
+    player.offset += (player.targetOffset - player.offset) * 0.3;
+    const px = player.x + player.offset;
+    ctx.fillStyle = player.color;
+    ctx.fillRect(px, player.y, 70, 100); 
+    // 眼睛 (反差设计)
+    ctx.fillStyle = "#000"; ctx.fillRect(px + 45, player.y + 25, 20, 4); 
+
+    // 绘制粒子
+    particles.forEach((p, i) => {
+        p.x += p.vx; p.y += p.vy; p.vy += 0.5; p.life--;
+        ctx.fillStyle = p.color;
+        ctx.fillRect(p.x, p.y, 5, 5);
+        if (p.life <= 0) particles.splice(i, 1);
+    });
+
+    ctx.restore();
+
+    // 绘制信息
+    ctx.fillStyle = state.msgColor;
+    ctx.font = "italic bold 24px Georgia";
+    ctx.textAlign = "center";
+    ctx.fillText(state.msg, canvas.width/2, 80);
+
+    // 绘制技能轮盘
+    if (state.isWheelOpen) {
+        drawWheel();
+    }
+
+    requestAnimationFrame(draw);
+}
+
+function drawWheel() {
+    const cx = canvas.width / 2, cy = canvas.height / 2, r = 130;
+    ctx.fillStyle = "rgba(0,0,0,0.8)";
+    ctx.fillRect(0,0,canvas.width, canvas.height);
+
+    skills.forEach((s, i) => {
+        const step = (Math.PI * 2) / skills.length;
+        const start = i * step - Math.PI / 2;
+        const end = (i + 1) * step - Math.PI / 2;
+        
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.arc(cx, cy, r, start, end);
+        ctx.fillStyle = (state.selectedSkill === i) ? s.color : "#222";
+        ctx.globalAlpha = (state.selectedSkill === i) ? 0.9 : 0.5;
+        ctx.fill();
+        ctx.strokeStyle = "#fff";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+
+        // 图标与文字
+        const tx = cx + Math.cos(start + step/2) * (r * 0.7);
+        const ty = cy + Math.sin(start + step/2) * (r * 0.7);
+        ctx.fillStyle = "#fff";
+        ctx.font = "20px Arial";
+        ctx.fillText(s.icon, tx, ty - 5);
+        ctx.font = "12px Arial";
+        ctx.fillText(s.name, tx, ty + 15);
+    });
+}
+
+draw();
+</script>
+</body>
+</html>

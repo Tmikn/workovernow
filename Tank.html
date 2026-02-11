@@ -5,10 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>黑神话：坦克</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #0a0a0a; font-family: 'Segoe UI', sans-serif; user-select: none; }
+        body { margin: 0; overflow: hidden; background: #000; font-family: 'Segoe UI', sans-serif; user-select: none; }
         
-        /* UI 顶层 */
-        #ui { position: fixed; top: 20px; left: 20px; color: white; pointer-events: none; z-index: 100; width: calc(100% - 40px); }
+        /* 启动遮罩 */
+        #start-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.9); display: flex; flex-direction: column;
+            justify-content: center; align-items: center; z-index: 5000; color: #9B409E;
+        }
+
+        #ui { position: fixed; top: 20px; left: 20px; color: white; pointer-events: none; z-index: 100; width: calc(100% - 40px); display: none; }
         .stats-row { display: flex; justify-content: space-between; align-items: flex-start; }
         .bar-container { width: 200px; height: 12px; background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255,255,255,0.3); margin-top: 5px; border-radius: 6px; overflow: hidden; }
         #hp-bar { width: 100%; height: 100%; background: #ff4444; transition: width 0.3s; }
@@ -17,28 +23,34 @@
         /* 升级界面 */
         #upgrade-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); display: none; flex-direction: column; justify-content: center; align-items: center; z-index: 3000; }
         .upgrade-card { background: #1a1a1a; border: 2px solid #9B409E; color: white; padding: 20px; margin: 10px; width: 260px; cursor: pointer; text-align: center; border-radius: 10px; }
-        .upgrade-card:hover { border-color: #00f2ff; background: #222; transform: scale(1.02); }
-        .upgrade-card h3 { color: #00f2ff; margin-top: 0; }
+        .upgrade-card:hover { border-color: #00f2ff; transform: scale(1.05); }
 
-        /* 摇杆区域 */
+        /* 摇杆 */
         .joystick-zone { position: fixed; bottom: 40px; width: 120px; height: 120px; z-index: 1000; display: none; touch-action: none; }
         #joy-left { left: 40px; }
         #joy-right { right: 40px; }
         .joy-base { width: 100%; height: 100%; border-radius: 50%; background: rgba(255,255,255,0.05); border: 2px solid rgba(255,255,255,0.2); position: relative; }
-        .joy-stick { width: 50px; height: 50px; border-radius: 50%; background: #9B409E; position: absolute; top: 35px; left: 35px; box-shadow: 0 0 15px rgba(155, 64, 158, 0.4); }
-        #joy-right .joy-stick { background: #00f2ff; box-shadow: 0 0 15px rgba(0, 242, 255, 0.4); }
+        .joy-stick { width: 50px; height: 50px; border-radius: 50%; background: #9B409E; position: absolute; top: 35px; left: 35px; }
+        
+        button { padding: 15px 40px; background: #9B409E; color: white; border: none; cursor: pointer; border-radius: 5px; font-weight: bold; font-size: 1.2em; }
     </style>
 </head>
 <body>
 
+    <div id="start-overlay">
+        <h1 style="margin-bottom: 40px;">坦克: 大战</h1>
+        <button id="start-btn">初始化作战系统</button>
+        <p style="color: #666; margin-top: 20px;">[ W/S 进退 | A/D 转向 | 鼠标 瞄准 ]</p>
+    </div>
+
     <div id="ui">
         <div class="stats-row">
             <div>
-                <div style="font-size:12px; color:#00f2ff; font-weight:bold;">LVL <span id="lvl-val">1</span></div>
+                <div style="font-size:12px; color:#00f2ff;">LV<span id="lvl-val">1</span></div>
                 <div class="bar-container"><div id="exp-bar"></div></div>
             </div>
             <div style="text-align: right;">
-                <div style="font-size:12px; color:#ff4444; font-weight:bold;">HULL</div>
+                <div style="font-size:12px; color:#ff4444;">HULL</div>
                 <div class="bar-container"><div id="hp-bar"></div></div>
             </div>
         </div>
@@ -49,25 +61,49 @@
     <div id="joy-right" class="joystick-zone"><div class="joy-base"><div class="joy-stick" id="stick-r"></div></div></div>
 
     <div id="upgrade-overlay">
-        <h1 style="color: #9B409E; margin-bottom: 30px;">系统进化升级</h1>
+        <h2 style="color: #9B409E;">系统组件进化</h2>
         <div id="upgrade-options" style="display: flex; flex-wrap: wrap; justify-content: center;"></div>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
     <script>
-        /** --- 1. 配置与属性 --- **/
-        let gameActive = true, score = 0, level = 1, exp = 0, expNeeded = 5;
+        /** --- 1. 初始化变量与音频 --- **/
+        let gameActive = false, score = 0, level = 1, exp = 0, expNeeded = 5;
         let playerHP = 100, maxHP = 100;
+        const MAP_SIZE = 200;
         const enemies = [], bullets = [], keys = {};
+
+        /** --- 音效资源配置 --- **/
+        // 射击音效 (高音、短促)
+        const fireSound = new Audio('https://assets.mixkit.co/active_storage/sfx/2895/2895-preview.mp3'); 
+        fireSound.volume = 0.3;
+
+        // 爆炸音效 (低音、厚重)
+        const explodeSound = new Audio('https://assets.mixkit.co/active_storage/sfx/1659/1659-preview.mp3');
+        explodeSound.volume = 0.5;
+
+        /** * 核心：重叠播放函数
+         * 解决问题：如果连续快速点击，上一个声音没播完，下一个声音播不出来。
+         **/
+        function playSound(audioNode) {
+            const clone = audioNode.cloneNode(); // 克隆一个副本
+            clone.volume = audioNode.volume;
+            clone.play();
+        }
         
+        // 音乐设置
+        const bgm = new Audio('music/Brain Dance.mp3'); // 示例合成器音乐
+        bgm.loop = true;
+        bgm.volume = 0.4;
+
         const stats = {
-            moveSpeed: 0.2,
+            moveSpeed: 0.22,
             fireRate: 800,
             bulletSize: 0.35,
-            bulletSpeed: 1.2,
+            bulletSpeed: 1.25,
             multiShot: 1,
-            turretSpeed: 0.03, // 初始炮塔转速（弧度/帧）
+            turretSpeed: 0.065,
             lastFire: 0
         };
 
@@ -76,9 +112,9 @@
         let joyL = { x: 0, y: 0, active: false };
         let joyR = { x: 0, y: 0, active: false };
 
-        /** --- 2. 场景初始化 --- **/
+        /** --- 2. 场景构建 --- **/
         const scene = new THREE.Scene();
-        scene.fog = new THREE.Fog(0x0a0a0a, 40, 180);
+        scene.fog = new THREE.Fog(0x0a0a0a, 50, 200);
         const camera = new THREE.PerspectiveCamera(70, window.innerWidth/window.innerHeight, 0.1, 1000);
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
@@ -86,26 +122,31 @@
 
         scene.add(new THREE.AmbientLight(0xffffff, 0.4));
         const light = new THREE.DirectionalLight(0xffffff, 0.8);
-        light.position.set(30, 50, 30);
+        light.position.set(50, 50, 50);
         scene.add(light);
 
         const floor = new THREE.Mesh(new THREE.PlaneGeometry(1000, 1000), new THREE.MeshPhongMaterial({ color: 0x111111 }));
         floor.rotation.x = -Math.PI/2;
         scene.add(floor);
-        scene.add(new THREE.GridHelper(500, 50, 0x333333, 0x111111));
+        scene.add(new THREE.GridHelper(600, 60, 0x444444, 0x111111));
 
-        /** --- 3. 坦克工厂 --- **/
+        // 空气墙视觉
+        const ring = new THREE.Mesh(
+            new THREE.TorusGeometry(MAP_SIZE, 0.4, 16, 100),
+            new THREE.MeshBasicMaterial({ color: 0x9B409E, transparent: true, opacity: 0.3 })
+        );
+        ring.rotation.x = Math.PI/2;
+        scene.add(ring);
+
+        /** --- 3. 坦克逻辑 --- **/
         function createTank(color) {
             const group = new THREE.Group();
-            
-            // 底盘
             const chassis = new THREE.Group();
             const body = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.8, 3.2), new THREE.MeshPhongMaterial({ color }));
             body.position.y = 0.4;
             chassis.add(body);
             group.add(chassis);
 
-            // 炮塔
             const turretGroup = new THREE.Group();
             turretGroup.position.y = 0.9;
             const head = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.6, 1.6), new THREE.MeshPhongMaterial({ color }));
@@ -123,93 +164,59 @@
 
         const player = createTank(0x9B409E);
 
-        /** --- 4. 物理与输入逻辑 --- **/
-        function resolveCollisions() {
-            const units = [player, ...enemies];
-            const radius = 3.2; 
-            for (let i = 0; i < units.length; i++) {
-                for (let j = i + 1; j < units.length; j++) {
-                    const a = units[i], b = units[j];
-                    const dx = a.position.x - b.position.x;
-                    const dz = a.position.z - b.position.z;
-                    const distSq = dx*dx + dz*dz;
-                    if (distSq < radius * radius) {
-                        const dist = Math.sqrt(distSq) || 1;
-                        const overlap = (radius - dist) + 0.05;
-                        const nx = dx / dist, nz = dz / dist;
-                        const weightA = (a === player) ? 0.2 : 0.5;
-                        a.position.x += nx * overlap * weightA;
-                        a.position.z += nz * overlap * weightA;
-                        b.position.x -= nx * overlap * (1 - weightA);
-                        b.position.z -= nz * overlap * (1 - weightA);
-                    }
-                }
-            }
-        }
-
-        /** --- 修改后的坦克移动规则：AD转向，WS进退 --- **/
+        /** --- 4. 核心输入逻辑 (坦克转向模式 + 空气墙) --- **/
         function updateInputs() {
-            // 1. 底盘旋转控制 (A/D 键 或 左摇杆 X 轴)
+            // 底盘旋转 (AD转向)
             let rotationDir = 0;
-            if (keys['a']) rotationDir += 1; // 左转
-            if (keys['d']) rotationDir -= 1; // 右转
-            
-            // 移动端适配：左摇杆水平偏移控制旋转速度
-            if (joyL.active) {
-                rotationDir = -joyL.x; 
+            if (keys['a']) rotationDir += 1;
+            if (keys['d']) rotationDir -= 1;
+            if (joyL.active) rotationDir = -joyL.x; 
+            player.userData.chassis.rotation.y += rotationDir * 0.045;
+
+            // 位移 (WS进退)
+            let moveVal = 0;
+            if (keys['w']) moveVal += stats.moveSpeed;
+            if (keys['s']) moveVal -= stats.moveSpeed;
+            if (joyL.active) moveVal = -joyL.y * stats.moveSpeed;
+
+            if (moveVal !== 0) {
+                const dir = new THREE.Vector3(0, 0, 1).applyQuaternion(player.userData.chassis.quaternion);
+                player.position.add(dir.multiplyScalar(moveVal));
             }
 
-            // 应用旋转：基于一个固定的转向速度
-            const turnSpeed = 0.045; 
-            player.userData.chassis.rotation.y += rotationDir * turnSpeed;
-
-            // 2. 底盘位移控制 (W/S 键 或 左摇杆 Y 轴)
-            let moveSpeed = 0;
-            if (keys['w']) moveSpeed += stats.moveSpeed; // 前进
-            if (keys['s']) moveSpeed -= stats.moveSpeed; // 后退
-
-            // 移动端适配：左摇杆垂直偏移控制进退
-            if (joyL.active) {
-                moveSpeed = -joyL.y * stats.moveSpeed;
+            // 空气墙硬限制
+            if (player.position.length() > MAP_SIZE) {
+                player.position.setLength(MAP_SIZE);
             }
 
-            if (moveSpeed !== 0) {
-                // 计算当前底盘朝向的向量
-                const direction = new THREE.Vector3(0, 0, 1);
-                direction.applyQuaternion(player.userData.chassis.quaternion);
-                
-                // 按朝向移动整个坦克模型
-                player.position.add(direction.multiplyScalar(moveSpeed));
-            }
-
-            // 3. 炮塔平滑转向核心 (保持不变：跟随鼠标或右摇杆)
-            let targetTurretAngle = player.userData.turretGroup.rotation.y;
+            // 炮塔平滑指向
+            let targetAngle = player.userData.turretGroup.rotation.y;
             if (joyR.active) {
-                targetTurretAngle = Math.atan2(-joyR.x, -joyR.y);
+                targetAngle = Math.atan2(-joyR.x, -joyR.y);
             } else {
                 raycaster.setFromCamera(mouse, camera);
                 const intersects = raycaster.intersectObject(floor);
                 if (intersects.length > 0) {
                     const pt = intersects[0].point;
-                    targetTurretAngle = Math.atan2(pt.x - player.position.x, pt.z - player.position.z);
+                    targetAngle = Math.atan2(pt.x - player.position.x, pt.z - player.position.z);
                 }
             }
-            
-            const targetQ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), targetTurretAngle);
+            const targetQ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), targetAngle);
             player.userData.turretGroup.quaternion.rotateTowards(targetQ, stats.turretSpeed);
         }
 
-        /** --- 5. 战斗逻辑 --- **/
+        /** --- 5. 战斗与循环 --- **/
         function fireBullet(owner, isPlayer) {
             const count = isPlayer ? stats.multiShot : 1;
+            if (isPlayer) {
+                playSound(fireSound);
+            }
             for (let i = 0; i < count; i++) {
                 const b = new THREE.Mesh(new THREE.SphereGeometry(isPlayer ? stats.bulletSize : 0.28), 
                     new THREE.MeshBasicMaterial({ color: isPlayer ? 0x00f2ff : 0xff4444 }));
                 b.position.copy(owner.position).add(new THREE.Vector3(0, 1.2, 0));
-                
                 const dir = new THREE.Vector3(0, 0, 1).applyQuaternion(owner.userData.turretGroup.quaternion);
                 if (isPlayer && count > 1) dir.applyAxisAngle(new THREE.Vector3(0,1,0), (i - (count-1)/2) * 0.2);
-
                 b.userData = { velocity: dir.multiplyScalar(isPlayer ? stats.bulletSpeed : 0.45), owner: isPlayer ? 'p' : 'e' };
                 bullets.push(b); scene.add(b);
             }
@@ -226,27 +233,43 @@
                 stats.lastFire = Date.now();
             }
 
+            // 敌人 AI
             enemies.forEach(en => {
                 const dir = new THREE.Vector3().subVectors(player.position, en.position).normalize();
-                const dist = en.position.distanceTo(player.position);
                 en.userData.chassis.rotation.y = Math.atan2(dir.x, dir.z);
                 en.userData.turretGroup.rotation.y = Math.atan2(dir.x, dir.z);
-                if (dist > 7) en.position.add(dir.multiplyScalar(0.08 + level*0.005));
-                if (Date.now() - en.userData.lastFire > 3500 && dist < 50) {
+                if (en.position.distanceTo(player.position) > 8) en.position.add(dir.multiplyScalar(0.08 + level*0.005));
+                if (Date.now() - en.userData.lastFire > 3500) {
                     fireBullet(en, false);
                     en.userData.lastFire = Date.now();
                 }
             });
 
-            resolveCollisions();
+            // 碰撞检测
+            const units = [player, ...enemies];
+            for (let i = 0; i < units.length; i++) {
+                for (let j = i + 1; j < units.length; j++) {
+                    const a = units[i], b = units[j];
+                    const dist = a.position.distanceTo(b.position);
+                    if (dist < 3.2) {
+                        const push = (3.2 - dist) * 0.5;
+                        const vec = new THREE.Vector3().subVectors(a.position, b.position).normalize();
+                        a.position.add(vec.clone().multiplyScalar(push * 0.2));
+                        b.position.sub(vec.clone().multiplyScalar(push * 0.8));
+                    }
+                }
+            }
 
+            // 子弹处理
             for (let i = bullets.length - 1; i >= 0; i--) {
                 const b = bullets[i]; b.position.add(b.userData.velocity);
-                if (b.position.distanceTo(player.position) > 130) { scene.remove(b); bullets.splice(i, 1); continue; }
+                if (b.position.length() > 200) { scene.remove(b); bullets.splice(i, 1); continue; }
                 
                 if (b.userData.owner === 'p') {
                     for (let j = enemies.length - 1; j >= 0; j--) {
                         if (b.position.distanceTo(enemies[j].position) < 2.2) {
+                            // --- 插入代码：播放击毁音效 ---
+                            playSound(explodeSound);
                             scene.remove(enemies[j]); enemies.splice(j, 1);
                             scene.remove(b); bullets.splice(i, 1);
                             gainExp(1); break;
@@ -267,11 +290,10 @@
         const upgradePool = [
             { id: 'fire', name: '并联炮管', desc: '增加额外火力点', act: () => stats.multiShot++ },
             { id: 'rate', name: '自动装填', desc: '射击频率提升 25%', act: () => stats.fireRate *= 0.75 },
-            { id: 'speed', name: '氮气加速', desc: '底盘移动速度提升', act: () => stats.moveSpeed += 0.04 },
+            { id: 'speed', name: '大马力引擎', desc: '最大行进速度提升', act: () => stats.moveSpeed += 0.05 },
             { id: 'size', name: '爆裂弹头', desc: '增加子弹体积与判定', act: () => stats.bulletSize += 0.15 },
             { id: 'hull', name: '装甲加固', desc: '提升最大完整性并修复', act: () => { maxHP += 25; playerHP = maxHP; } },
-            // 新增项
-            { id: 'servo', name: '伺服电机', desc: '炮塔转向速度大幅提升', act: () => stats.turretSpeed += 0.005 }
+            { id: 'servo', name: '伺服电机', desc: '炮塔转向速度大幅提升', act: () => stats.turretSpeed += 0.04 }
         ];
 
         function gainExp(n) {
@@ -305,7 +327,20 @@
             document.getElementById('score-val').innerText = score;
         }
 
-        /** --- 7. 控制绑定 --- **/
+        /** --- 7. 交互绑定 --- **/
+        document.getElementById('start-btn').onclick = () => {
+            // 预加载音效
+            fireSound.load();
+            explodeSound.load();
+            bgm.load();
+            
+            document.getElementById('start-overlay').style.display = 'none';
+            document.getElementById('ui').style.display = 'block';
+            gameActive = true;
+            bgm.play(); // 播放音乐
+            animate();
+        };
+
         window.addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
         window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
         window.addEventListener('mousemove', e => {
@@ -313,6 +348,7 @@
             mouse.y = -(e.clientY/window.innerHeight)*2 + 1;
         });
 
+        // 摇杆逻辑适配
         function bindJoy(id, stickId, state) {
             const zone = document.getElementById(id), stick = document.getElementById(stickId);
             if ('ontouchstart' in window) zone.style.display = 'block';
@@ -330,15 +366,18 @@
         bindJoy('joy-right', 'stick-r', joyR);
 
         setInterval(() => {
-            if (gameActive && enemies.length < 12 + level) {
+            if (gameActive && enemies.length < 10 + level) {
                 const en = createTank(0xff4444);
                 const a = Math.random() * Math.PI * 2;
-                en.position.set(player.position.x + Math.cos(a)*65, 0, player.position.z + Math.sin(a)*65);
+                en.position.set(player.position.x + Math.cos(a)*70, 0, player.position.z + Math.sin(a)*70);
                 enemies.push(en);
             }
-        }, 1800);
+        }, 2000);
 
-        animate();
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth/window.innerHeight; camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
     </script>
 </body>
 </html>
