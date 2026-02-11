@@ -76,11 +76,11 @@
 
         /** --- 音效资源配置 --- **/
         // 射击音效 (高音、短促)
-        const fireSound = new Audio('https://assets.mixkit.co/active_storage/sfx/2895/2895-preview.mp3'); 
+        const fireSound = new Audio('music/344312__musiclegends__laser-shoot7.wav'); 
         fireSound.volume = 0.3;
 
         // 爆炸音效 (低音、厚重)
-        const explodeSound = new Audio('https://assets.mixkit.co/active_storage/sfx/1659/1659-preview.mp3');
+        const explodeSound = new Audio('music/517664__devern__8-bit-cannon.wav');
         explodeSound.volume = 0.5;
 
         /** * 核心：重叠播放函数
@@ -333,7 +333,7 @@
             fireSound.load();
             explodeSound.load();
             bgm.load();
-            
+
             document.getElementById('start-overlay').style.display = 'none';
             document.getElementById('ui').style.display = 'block';
             gameActive = true;
