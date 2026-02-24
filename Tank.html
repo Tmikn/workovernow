@@ -129,7 +129,12 @@
             bulletSpeed: 1.25,
             multiShot: 1,
             turretSpeed: 0.065,
-            lastFire: 0
+            lastFire: 0,
+
+            // --- 新增的模块化战斗属性 ---
+            bulletDamage: 50, // 子弹基础伤害
+            ramDamage: 0,      // 碰撞伤害（每帧造成的伤害）
+            armor: 0           // 减伤装甲（你可以以后自己实现）
         };
 
         const mouse = new THREE.Vector2();
@@ -237,18 +242,16 @@
 
             group.add(chassis);
 
-            // --- 炮塔总组 ---
+             // --- 炮塔总组 ---
             const turretGroup = new THREE.Group();
             turretGroup.position.y = 0.9;
             
-            // 炮塔座
             const head = new THREE.Mesh(
                 new THREE.BoxGeometry(1.6, 0.6, 1.6), 
                 new THREE.MeshPhongMaterial({ color })
             );
             turretGroup.add(head);
 
-            // 炮管 (朝向 +Z)
             const barrel = new THREE.Mesh(
                 new THREE.CylinderGeometry(0.12, 0.15, 2.4), 
                 new THREE.MeshPhongMaterial({ color: 0x222222 })
@@ -259,8 +262,34 @@
             
             group.add(turretGroup);
 
-            // 存入引用以便逻辑控制
-            group.userData = { chassis, turretGroup, lastFire: Date.now() };
+            // 【修复重点 1】：先初始化 userData，把底盘和炮塔存进去
+            group.userData = { chassis: chassis, turretGroup: turretGroup, lastFire: Date.now() };
+
+            // --- 给敌人添加 3D 血条 ---
+            if (color !== 0x9B409E) { 
+                const hpGroup = new THREE.Group();
+                hpGroup.position.y = 3.0; 
+
+                const bgGeo = new THREE.PlaneGeometry(2.0, 0.25);
+                const bgMat = new THREE.MeshBasicMaterial({ color: 0x333333 });
+                const bgMesh = new THREE.Mesh(bgGeo, bgMat);
+                hpGroup.add(bgMesh);
+
+                const fgGeo = new THREE.PlaneGeometry(2.0, 0.25);
+                fgGeo.translate(1.0, 0, 0); 
+                const fgMat = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+                const fgMesh = new THREE.Mesh(fgGeo, fgMat);
+                fgMesh.position.x = -1.0; 
+                fgMesh.position.z = 0.01; 
+                hpGroup.add(fgMesh);
+
+                group.add(hpGroup);
+                
+                // 【修复重点 2】：用点语法（追加属性），而不是覆盖整个对象
+                group.userData.hpGroup = hpGroup; 
+                group.userData.hpBar = fgMesh;    
+            }
+
             scene.add(group);
             return group;
         }
@@ -397,6 +426,11 @@
                 const dir = new THREE.Vector3().subVectors(player.position, en.position).normalize();
                 en.userData.chassis.rotation.y = Math.atan2(dir.x, dir.z);
                 en.userData.turretGroup.rotation.y = Math.atan2(dir.x, dir.z);
+                // --- 插入部分：让血条永远正对摄像机 ---
+                if (en.userData.hpGroup) {
+                    en.userData.hpGroup.quaternion.copy(camera.quaternion);
+                }
+                // ------------------------------------
                 if (en.position.distanceTo(player.position) > 8) en.position.add(dir.multiplyScalar(0.08 + level*0.005));
                 if (Date.now() - en.userData.lastFire > 3500) {
                     fireBullet(en, false);
@@ -412,10 +446,31 @@
                     const a = units[i], b = units[j];
                     const dist = a.position.distanceTo(b.position);
                     if (dist < 3.2) {
+                        // 原有的物理推开逻辑
                         const push = (3.2 - dist) * 0.5;
                         const vec = new THREE.Vector3().subVectors(a.position, b.position).normalize();
                         a.position.add(vec.clone().multiplyScalar(push * 0.2));
                         b.position.sub(vec.clone().multiplyScalar(push * 0.8));
+
+                        // 【新增】玩家撞击敌人造成伤害 (a 是玩家的情况)
+                        if (a === player && stats.ramDamage > 0) {
+                            b.userData.hp -= stats.ramDamage; // 每帧扣血
+                            // --- 插入部分：更新血条 UI ---
+                            const hpPercent = Math.max(0, enemies[j].userData.hp / enemies[j].userData.maxHp);
+                            enemies[j].userData.hpBar.scale.x = hpPercent;
+
+                            // 变色逻辑：血量低于一半变黄，低于 20% 变红
+                            if (hpPercent < 0.2) enemies[j].userData.hpBar.material.color.setHex(0xff0000);
+                            else if (hpPercent < 0.5) enemies[j].userData.hpBar.material.color.setHex(0xffff00);
+                            // --------------------------
+                            if (b.userData.hp <= 0 && !b.userData.dead) {
+                                b.userData.dead = true; // 防止一帧内重复触发wwwww
+                                playSound(explodeSound);
+                                scene.remove(b);
+                                enemies.splice(enemies.indexOf(b), 1);
+                                gainExp(1);
+                            }
+                        }
                     }
                 }
             }
@@ -435,17 +490,33 @@
                 if (b.userData.owner === 'p') {
                     for (let j = enemies.length - 1; j >= 0; j--) {
                         if (b.position.distanceTo(enemies[j].position) < 2.2) {
-                            playSound(explodeSound);
-                            scene.remove(enemies[j]); enemies.splice(j, 1);
-                            scene.remove(b); bullets.splice(i, 1);
-                            gainExp(1); break;
+                            
+                            // 【新增】扣除敌人血量
+                            enemies[j].userData.hp -= stats.bulletDamage;
+                            // --- 插入部分：更新血条 UI ---
+                            const hpPercent = Math.max(0, enemies[j].userData.hp / enemies[j].userData.maxHp);
+                            enemies[j].userData.hpBar.scale.x = hpPercent;
+                            
+                            // 变色逻辑：血量低于一半变黄，低于 20% 变红
+                            if (hpPercent < 0.2) enemies[j].userData.hpBar.material.color.setHex(0xff0000);
+                            else if (hpPercent < 0.5) enemies[j].userData.hpBar.material.color.setHex(0xffff00);
+                            // --------------------------
+                            scene.remove(b); bullets.splice(i, 1); // 子弹销毁
+                            
+                            // 判断敌人是否死亡
+                            if (enemies[j].userData.hp <= 0) {
+                                playSound(explodeSound);
+                                scene.remove(enemies[j]); enemies.splice(j, 1);
+                                gainExp(1); 
+                            }
+                            break; // 子弹已销毁，跳出敌人循环
                         }
                     }
                 } else if (b.position.distanceTo(player.position) < 1.8) {
                     playerHP -= 15; scene.remove(b); bullets.splice(i, 1);
                     updateUI(); if (playerHP <= 0) triggerGameOver();
                 }
-            }
+}
 
             camera.position.lerp(new THREE.Vector3(player.position.x, 38, player.position.z - 28), 0.08);
             camera.lookAt(player.position);
@@ -456,10 +527,12 @@
         const upgradePool = [
             { id: 'fire', name: '并联炮管', desc: '增加额外火力点', act: () => stats.multiShot++ },
             { id: 'rate', name: '自动装填', desc: '射击频率提升 25%', act: () => stats.fireRate *= 0.75 },
-            { id: 'speed', name: '大马力引擎', desc: '最大行进速度提升', act: () => stats.moveSpeed += 0.05 },
-            { id: 'size', name: '爆裂弹头', desc: '增加子弹体积与判定', act: () => stats.bulletSize += 0.15 },
-            { id: 'hull', name: '装甲加固', desc: '提升最大完整性并修复', act: () => { maxHP += 25; playerHP = maxHP; } },
-            { id: 'servo', name: '伺服电机', desc: '炮塔转向速度大幅提升', act: () => stats.turretSpeed += 0.04 }
+            { id: 'speed', name: '大马力引擎', desc: '加速！加速！', act: () => stats.moveSpeed += 0.05 },
+            { id: 'size', name: '爆裂弹头', desc: '增加子弹体积与判定', act: () => stats.bulletSize += 1 },
+            { id: 'hull', name: '装甲加固', desc: '提升最大血量并回复一定血量', act: () => { maxHP += 25; playerHP += 50; } },
+            { id: 'servo', name: '伺服电机', desc: '炮塔转向速度大幅提升', act: () => stats.turretSpeed += 0.04 },
+            { id: 'ram', name: '泥头车', desc: '如果我们的铁骑继续前进...', act: () => stats.ramDamage += 2 },
+            { id: 'dmg', name: '贫铀穿甲弹', desc: '主炮基础伤害提升30点', act: () => stats.bulletDamage += 30 }
         ];
 
         function gainExp(n) {
@@ -608,13 +681,20 @@
         bindJoy('joy-right', 'stick-r', joyR);
 
         setInterval(() => {
-            if (gameActive && enemies.length < 10 + level) {
+            if (gameActive && enemies.length < 20 + level*10) {
                 const en = createTank(0xff4444);
+        
+                // --- 插入部分：初始化血量数据 ---
+                const maxHealth = 80 + (level * 20); // 随等级成长
+                en.userData.maxHp = maxHealth;
+                en.userData.hp = maxHealth;
+                // ------------------------------
+
                 const a = Math.random() * Math.PI * 2;
                 en.position.set(player.position.x + Math.cos(a)*70, 0, player.position.z + Math.sin(a)*70);
                 enemies.push(en);
             }
-        }, 2000);
+        }, 1000);
 
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth/window.innerHeight; camera.updateProjectionMatrix();
