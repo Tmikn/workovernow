@@ -37,62 +37,129 @@
 </head>
 <body>
 
-    <div id="start-overlay">
-        <h1 style="margin-bottom: 40px;">坦克: 大战</h1>
-        <button id="start-btn">初始化作战系统</button>
-        <p style="color: #666; margin-top: 20px;">[ W/S 进退 | A/D 转向 | 鼠标 瞄准 ]</p>
+    <div id="btn-lang" style="position: fixed; top: 20px; right: 70px; width: 40px; height: 40px; background: rgba(0,0,0,0.5); border: 2px solid #9B409E; color: #9B409E; border-radius: 5px; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 9999; font-weight: bold; font-size: 14px;">
+        EN
     </div>
 
-        <div id="ui">
-            <div class="stats-column" style="display: flex; flex-direction: column; gap: 8px;">
-                
-                <div>
-                    <div style="font-size:12px; color:#00f2ff; font-weight:bold; letter-spacing:1px;">
-                        LVL <span id="lvl-val">1</span>
-                    </div>
-                    <div class="bar-container"><div id="exp-bar"></div></div>
-                </div>
+    <div id="start-overlay">
+        <h1 id="t-title" style="margin-bottom: 40px;">坦克: 大战</h1>
+        <button id="start-btn"><span id="t-start">初始化作战系统</span></button>
+        <p id="t-tips" style="color: #666; margin-top: 20px;">[ W/S 进退 | A/D 转向 | 鼠标 瞄准 ]</p>
+    </div>
 
-                <div>
-                    <div style="font-size:12px; color:#ff4444; font-weight:bold; letter-spacing:1px;">
-                        HULL INTEGRITY
-                    </div>
-                    <div class="bar-container"><div id="hp-bar"></div></div>
+    <div id="ui">
+        <div class="stats-column" style="display: flex; flex-direction: column; gap: 8px;">
+            <div>
+                <div style="font-size:12px; color:#00f2ff; font-weight:bold; letter-spacing:1px;">
+                    <span id="t-lvl">LVL</span> <span id="lvl-val">1</span>
                 </div>
-
-                <div style="color: #9B409E; font-weight: bold; font-size: 14px; margin-top: 5px;">
-                    SCORE: <span id="score-val">0</span>
+                <div class="bar-container"><div id="exp-bar"></div></div>
+            </div>
+            <div>
+                <div style="font-size:12px; color:#ff4444; font-weight:bold; letter-spacing:1px;" id="t-hull">
+                    HULL INTEGRITY
                 </div>
+                <div class="bar-container"><div id="hp-bar"></div></div>
+            </div>
+            <div style="color: #9B409E; font-weight: bold; font-size: 14px; margin-top: 5px;">
+                <span id="t-score">SCORE:</span> <span id="score-val">0</span>
             </div>
         </div>
+    </div>
 
     <div id="joy-left" class="joystick-zone"><div class="joy-base"><div class="joy-stick" id="stick-l"></div></div></div>
     <div id="joy-right" class="joystick-zone"><div class="joy-base"><div class="joy-stick" id="stick-r"></div></div></div>
 
     <div id="upgrade-overlay">
-        <h2 style="color: #9B409E;">系统组件进化</h2>
+        <h2 id="t-upg-title" style="color: #9B409E;">系统组件进化</h2>
         <div id="upgrade-options" style="display: flex; flex-wrap: wrap; justify-content: center;"></div>
     </div>
 
     <div id="gameover-overlay" style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(139,0,0,0.85); z-index:4000; display:none; flex-direction:column; align-items:center; justify-content:center; color:white;">
-        <h1 style="font-size:3em; margin-bottom:10px;">失去链接...</h1>
-        <p style="font-size:1.5em; margin-bottom:30px;">最终评分: <span id="final-score">0</span></p>
-        <button id="btn-restart" style="padding:15px 40px; font-weight:bold; cursor:pointer; background:white; color:darkred; border:none; border-radius:5px;">重新开始</button>
+        <h1 id="t-go-title" style="font-size:3em; margin-bottom:10px;">失去链接...</h1>
+        <p style="font-size:1.5em; margin-bottom:30px;"><span id="t-go-score">最终评分:</span> <span id="final-score">0</span></p>
+        <button id="btn-restart"><span id="t-restart">重新开始</span></button>
     </div>
 
-    <div id="pause-trigger" style="position: fixed; top: 20px; right: 20px; width: 40px; height: 40px; background: rgba(0,0,0,0.5); border: 2px solid #00f2ff; color: #00f2ff; border-radius: 5px; display: flex; align-items: center; justify-content: center; cursor: pointer; pointer-events: auto; z-index: 500; font-weight: bold;">
-        ‖
-    </div>
+    <div id="pause-trigger" style="position: fixed; top: 20px; right: 20px; width: 40px; height: 40px; background: rgba(0,0,0,0.5); border: 2px solid #00f2ff; color: #00f2ff; border-radius: 5px; display: flex; align-items: center; justify-content: center; cursor: pointer; pointer-events: auto; z-index: 500; font-weight: bold;">‖</div>
 
     <div id="pause-overlay" style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:3500; display:none; flex-direction:column; align-items:center; justify-content:center; color:#00f2ff;">
-        <h1 style="font-size:3em; text-shadow: 0 0 10px #00f2ff;">系统已挂起</h1>
+        <h1 id="t-pause-title" style="font-size:3em; text-shadow: 0 0 10px #00f2ff;">系统已挂起</h1>
         <p style="color: white; margin-bottom: 30px;">PAUSED</p>
-        <button id="btn-resume" style="padding:15px 40px; font-weight:bold; cursor:pointer; background:#00f2ff; color:black; border:none; border-radius:5px; box-shadow: 0 0 15px #00f2ff;">恢复作战</button>
+        <button id="btn-resume"><span id="t-resume">恢复作战</span></button>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
     <script>
+        /** --- 多语言系统 (i18n) --- **/
+        let currentLang = 'zh'; // 默认中文
+
+        const dict = {
+            zh: {
+                title: "坦克: 大战", start: "初始化作战系统", tips: "[ W/S 进退 | A/D 转向 | 鼠标 瞄准 ]",
+                lvl: "等级", hull: "生命值", score: "得分:",
+                upgTitle: "系统组件进化",
+                goTitle: "失去链接...", goScore: "最终评分:", restart: "重新部署",
+                pauseTitle: "系统已挂起", resume: "恢复作战",
+                
+                // 升级卡片文案
+                fireName: "并联炮管", fireDesc: "增加额外火力点",
+                rateName: "自动装填", rateDesc: "射击频率提升 25%",
+                speedName: "大马力引擎", speedDesc: "行进速度大幅提升",
+                sizeName: "爆裂弹头", sizeDesc: "增加子弹体积与命中判定",
+                hullName: "装甲加固", hullDesc: "提升最大生命值并修复车体",
+                servoName: "伺服电机", servoDesc: "炮塔转向响应大幅提升",
+                ramName: "重型冲角", ramDesc: "对撞击到的敌人造成持续伤害",
+                dmgName: "贫铀穿甲弹", dmgDesc: "主炮基础伤害提升 30 点",
+                laserName: "高能激光束", laserDesc: "在炮塔侧面加装激光器，再次升级增加持续时间与伤害"
+            },
+            en: {
+                title: "TANK: COMBAT", start: "INITIALIZE SYSTEM", tips: "[ W/S Move | A/D Turn | Mouse Aim ]",
+                lvl: "LVL", hull: "HP", score: "SCORE:",
+                upgTitle: "SYSTEM EVOLUTION",
+                goTitle: "CONNECTION LOST...", goScore: "Final Score:", restart: "REDEPLOY",
+                pauseTitle: "SYSTEM SUSPENDED", resume: "RESUME COMBAT",
+                
+                // Upgrade Cards Text
+                fireName: "Twin Barrels", fireDesc: "Adds an extra firing point",
+                rateName: "Autoloader", rateDesc: "Increases fire rate by 25%",
+                speedName: "V8 Engine", speedDesc: "Drastically increases movement speed",
+                sizeName: "HE Shells", sizeDesc: "Increases bullet size and hitbox",
+                hullName: "Reinforced Armor", hullDesc: "Increases Max HP and repairs hull",
+                servoName: "Servo Motor", servoDesc: "Drastically increases turret rotation speed",
+                ramName: "Spiked Bumper", ramDesc: "Deals continuous damage to rammed enemies",
+                dmgName: "DU Shells", dmgDesc: "Increases base damage by 30",
+                laserName: "Energy Laser", laserDesc: "Mounts a laser. Upgrading increases duration and damage"
+            }
+        };
+
+        function applyLanguage() {
+            const t = dict[currentLang];
+            document.getElementById('t-title').innerText = t.title;
+            document.getElementById('t-start').innerText = t.start;
+            document.getElementById('t-tips').innerText = t.tips;
+            document.getElementById('t-lvl').innerText = t.lvl;
+            document.getElementById('t-hull').innerText = t.hull;
+            document.getElementById('t-score').innerText = t.score;
+            document.getElementById('t-upg-title').innerText = t.upgTitle;
+            document.getElementById('t-go-title').innerText = t.goTitle;
+            document.getElementById('t-go-score').innerText = t.goScore;
+            document.getElementById('t-restart').innerText = t.restart;
+            document.getElementById('t-pause-title').innerText = t.pauseTitle;
+            document.getElementById('t-resume').innerText = t.resume;
+            document.getElementById('btn-lang').innerText = currentLang === 'zh' ? '中' : 'EN';
+        }
+
+        // 绑定语言切换按钮
+        document.getElementById('btn-lang').onclick = () => {
+            currentLang = currentLang === 'zh' ? 'en' : 'zh';
+            applyLanguage();
+        };
+
+        // 初始化时调用一次，应用默认语言
+        applyLanguage();
+
         /** --- 1. 初始化变量与音频 --- **/
         let gameActive = false, score = 0, level = 1, exp = 0, expNeeded = 5;
         let playerHP = 100, maxHP = 100;
@@ -135,7 +202,12 @@
             // --- 新增的模块化战斗属性 ---
             bulletDamage: 50, // 子弹基础伤害
             ramDamage: 0,      // 碰撞伤害（每帧造成的伤害）
-            armor: 0           // 减伤装甲（你可以以后自己实现）
+            armor: 0,           // 减伤装甲
+
+            laserLevel: 0,        // 激光等级 (0代表还没获得)
+            laserDuration: 300,   // 激光持续时间 (毫秒)，初始0.3秒
+            laserCooldown: 3000,  // 激光冷却时间 (3秒发射一次)
+            laserLastFire: 0      // 上次发射时间记录
         };
 
         const mouse = new THREE.Vector2();
@@ -263,8 +335,41 @@
             
             group.add(turretGroup);
 
-            // 【修复重点 1】：先初始化 userData，把底盘和炮塔存进去
+        // 【核心修复】：必须先做这步！初始化最基础的 userData
             group.userData = { chassis: chassis, turretGroup: turretGroup, lastFire: Date.now() };
+
+            // --- 插入部分：副武器激光发射器 (仅玩家专属) ---
+            if (color === 0x9B409E) {
+                // 1. 激光器本体
+                const emitterGeo = new THREE.BoxGeometry(0.25, 0.25, 0.8);
+                const emitterMat = new THREE.MeshPhongMaterial({ color: 0x333333 });
+                const laserEmitter = new THREE.Mesh(emitterGeo, emitterMat);
+                laserEmitter.position.set(0.35, 0.1, 0.8); 
+                laserEmitter.visible = false; 
+                turretGroup.add(laserEmitter);
+
+                // 发射器前端
+                const tipGeo = new THREE.BoxGeometry(0.2, 0.2, 0.1);
+                const tipMat = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+                const tip = new THREE.Mesh(tipGeo, tipMat);
+                tip.position.set(0, 0, 0.45);
+                laserEmitter.add(tip);
+
+                // 2. 激光光束
+                const beamGeo = new THREE.CylinderGeometry(0.08, 0.08, 150);
+                beamGeo.rotateX(Math.PI / 2); 
+                beamGeo.translate(0, 0, 75);  
+                const beamMat = new THREE.MeshBasicMaterial({ 
+                    color: 0x00ff00, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending 
+                });
+                const laserBeam = new THREE.Mesh(beamGeo, beamMat);
+                laserBeam.visible = false; 
+                laserEmitter.add(laserBeam);
+
+                // 追加进 userData，安全了！
+                group.userData.laserEmitter = laserEmitter;
+                group.userData.laserBeam = laserBeam;
+            }
 
             // --- 给敌人添加 3D 血条 ---
             if (color !== 0x9B409E) { 
@@ -286,7 +391,7 @@
 
                 group.add(hpGroup);
                 
-                // 【修复重点 2】：用点语法（追加属性），而不是覆盖整个对象
+                // 同样安全追加
                 group.userData.hpGroup = hpGroup; 
                 group.userData.hpBar = fgMesh;    
             }
@@ -294,6 +399,7 @@
             scene.add(group);
             return group;
         }
+        
 
         const player = createTank(0x9B409E);
 
@@ -619,7 +725,78 @@
                     child.intensity = 1.4 + Math.random() * 0.3;
                 }
             });
+            // --- 插入部分：激光开火与伤害逻辑 ---
+            if (stats.laserLevel > 0) {
+                const now = Date.now();
+                // 1. 判断是否该开火了
+                if (!player.userData.isLaserActive && now - stats.laserLastFire > stats.laserCooldown) {
+                    player.userData.isLaserActive = true;
+                    player.userData.laserStartTime = now;
+                    player.userData.laserBeam.visible = true; // 显示光束
+                    stats.laserLastFire = now;
+                    // 可以借用子弹开火音效，或者以后加个专用的
+                    playSound(fireSound); 
+                }
 
+                // 2. 如果激光正在持续输出中
+                if (player.userData.isLaserActive) {
+                    if (now - player.userData.laserStartTime > stats.laserDuration) {
+                        // 持续时间结束，关闭激光
+                        player.userData.isLaserActive = false;
+                        player.userData.laserBeam.visible = false;
+                    } else {
+                        // 视觉效果：让激光束不停抖动变粗变细，产生高能不稳定感
+                        player.userData.laserBeam.scale.set(1 + Math.random(), 1 + Math.random(), 1);
+
+                        // 伤害判定：计算每个敌人到激光射线的距离
+                        const emitterPos = new THREE.Vector3();
+                        player.userData.laserEmitter.getWorldPosition(emitterPos);
+                        
+                        // 获取炮塔此时的绝对朝向
+                        const turretDir = new THREE.Vector3(0, 0, 1).applyQuaternion(
+                            player.userData.turretGroup.getWorldQuaternion(new THREE.Quaternion())
+                        ).normalize();
+
+                        for (let j = enemies.length - 1; j >= 0; j--) {
+                            const en = enemies[j];
+                            // 数学向量计算：敌人坐标到发射点的向量
+                            const v = new THREE.Vector3().subVectors(en.position, emitterPos);
+                            // 投影长度 (敌人在发射方向前方多远)
+                            const distAlongRay = v.dot(turretDir);
+                            
+                            // 如果敌人在前方，且在 150 码射程内
+                            if (distAlongRay > 0 && distAlongRay < 150) {
+                                // 算出射线上距离敌人最近的一个点
+                                const projectedPoint = emitterPos.clone().add(turretDir.clone().multiplyScalar(distAlongRay));
+                                // 如果敌人离激光束小于 1.8 (命中判定半径)
+                                if (en.position.distanceTo(projectedPoint) < 1.8) {
+                                    
+                                    // 持续扣血：因为这是每帧执行的，所以单次伤害不能太高
+                                    // 满级激光一扫过去直接清屏！
+                                    en.userData.hp -= (1.5 * stats.laserLevel); 
+                                    
+                                    // 更新血条UI (直接复用你之前的逻辑)
+                                    const hpPercent = Math.max(0, en.userData.hp / en.userData.maxHp);
+                                    en.userData.hpBar.scale.x = hpPercent;
+                                    if (hpPercent < 0.2) en.userData.hpBar.material.color.setHex(0xff0000);
+                                    else if (hpPercent < 0.5) en.userData.hpBar.material.color.setHex(0xffff00);
+
+                                    // 击杀判定
+                                    if (en.userData.hp <= 0 && !en.userData.dead) {
+                                        en.userData.dead = true;
+                                        playSound(explodeSound);
+                                        if(typeof createExplosion === 'function') createExplosion(en.position.clone(), 0xff4444);
+                                        scene.remove(en); 
+                                        enemies.splice(j, 1);
+                                        gainExp(1);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            // ----------------------------------------
             // --- 7. 子弹处理 ---
             for (let i = bullets.length - 1; i >= 0; i--) {
                 const b = bullets[i]; b.position.add(b.userData.velocity);
@@ -672,20 +849,32 @@
             renderer.render(scene, camera);
         }
 
-        /** --- 6. 升级系统 --- **/
+/** --- 6. 升级系统 (支持多语言重构) --- **/
         const upgradePool = [
-            { id: 'fire', name: '并联炮管', desc: '增加额外火力点', act: () => stats.multiShot++ },
-            { id: 'rate', name: '自动装填', desc: '射击频率提升 25%', act: () => stats.fireRate *= 0.75 },
-            { id: 'speed', name: '大马力引擎', desc: '加速！加速！', act: () => stats.moveSpeed += 0.05 },
-            { id: 'size', name: '爆裂弹头', desc: '增加子弹体积与判定', act: () => stats.bulletSize += 1 },
-            { id: 'hull', name: '装甲加固', desc: '提升最大血量并回复一定血量', act: () => { maxHP += 25; playerHP += 50; } },
-            { id: 'servo', name: '伺服电机', desc: '炮塔转向速度大幅提升', act: () => stats.turretSpeed += 0.04 },
-            { id: 'ram', name: '泥头车', desc: '如果我们的铁骑继续前进...', act: () => stats.ramDamage += 2 },
-            { id: 'dmg', name: '贫铀穿甲弹', desc: '主炮基础伤害提升30点', act: () => stats.bulletDamage += 30 }
+            { id: 'fire',  act: () => stats.multiShot++ },
+            { id: 'rate',  act: () => stats.fireRate *= 0.75 },
+            { id: 'speed', act: () => stats.moveSpeed += 0.05 },
+            { id: 'size',  act: () => stats.bulletSize += 0.6 },
+            { id: 'hull',  act: () => { maxHP += 25; playerHP = Math.min(maxHP, playerHP + 50); } },
+            { id: 'servo', act: () => stats.turretSpeed += 0.04 },
+            { id: 'ram',   act: () => stats.ramDamage += 0.5 },
+            { id: 'dmg',   act: () => stats.bulletDamage += 30 },
+            { id: 'laser', 
+                act: () => { 
+                    stats.laserLevel++; 
+                    if (stats.laserLevel === 1) {
+                        // 第一次获得：模型显现！
+                        player.userData.laserEmitter.visible = true;
+                    } else {
+                        // 再次获得：每次增加 0.25 秒持续时间
+                        stats.laserDuration += 250; 
+                    }
+                } 
+            }
         ];
 
         function gainExp(n) {
-            exp += n; score += 10;
+            exp += n*10; score += 10;
             if (exp >= expNeeded) {
                 level++; exp = 0; expNeeded = Math.floor(expNeeded * 1.3) + 3;
                 showUpgrade();
@@ -693,18 +882,30 @@
             updateUI();
         }
 
-        function showUpgrade() {
+function showUpgrade() {
             gameActive = false;
-            // 隐藏暂停按钮防止逻辑冲突
             document.getElementById('pause-trigger').style.display = 'none';
             const container = document.getElementById('upgrade-options');
             container.innerHTML = '';
             const opts = [...upgradePool].sort(() => 0.5 - Math.random()).slice(0, 3);
+            
             opts.forEach(opt => {
                 const card = document.createElement('div');
                 card.className = 'upgrade-card';
-                card.innerHTML = `<h3>${opt.name}</h3><p>${opt.desc}</p>`;
-                card.onclick = () => {document.getElementById('pause-trigger').style.display = 'flex'; opt.act(); gameActive = true; document.getElementById('upgrade-overlay').style.display = 'none'; animate(); };
+                
+                // 【核心修改】：从当前语言字典中动态读取卡片名字和描述
+                const nameText = dict[currentLang][opt.id + 'Name'];
+                const descText = dict[currentLang][opt.id + 'Desc'];
+                
+                card.innerHTML = `<h3>${nameText}</h3><p>${descText}</p>`;
+                
+                card.onclick = () => {
+                    document.getElementById('pause-trigger').style.display = 'flex'; 
+                    opt.act(); 
+                    gameActive = true; 
+                    document.getElementById('upgrade-overlay').style.display = 'none'; 
+                    animate(); 
+                };
                 container.appendChild(card);
             });
             document.getElementById('upgrade-overlay').style.display = 'flex';
