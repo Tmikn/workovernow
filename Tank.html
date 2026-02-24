@@ -667,16 +667,47 @@
         function bindJoy(id, stickId, state) {
             const zone = document.getElementById(id), stick = document.getElementById(stickId);
             if ('ontouchstart' in window) zone.style.display = 'block';
-            zone.addEventListener('touchstart', () => state.active = true);
-            zone.addEventListener('touchmove', e => {
-                const t = e.touches[0], rect = zone.getBoundingClientRect();
+            
+            // 抽取更新摇杆位置的独立逻辑
+            function updateStick(e) {
+                // e.targetTouches 只包含按在这个特定摇杆区域内的手指
+                if (e.targetTouches.length === 0) return;
+                const t = e.targetTouches[0]; 
+                const rect = zone.getBoundingClientRect();
                 const dx = t.clientX - (rect.left + 60), dy = t.clientY - (rect.top + 60);
                 const d = Math.min(Math.sqrt(dx*dx+dy*dy), 50), a = Math.atan2(dy, dx);
                 stick.style.transform = `translate(${Math.cos(a)*d}px, ${Math.sin(a)*d}px)`;
                 state.x = (Math.cos(a)*d)/50; state.y = (Math.sin(a)*d)/50;
-            });
-            zone.addEventListener('touchend', () => { state.active = false; stick.style.transform = 'translate(0,0)'; });
+            }
+
+            // 监听触摸开始
+            zone.addEventListener('touchstart', (e) => {
+                e.preventDefault(); // 阻止浏览器默认行为（如滚动网页）
+                state.active = true;
+                updateStick(e); // 刚按下去也要更新一下位置，不然摇杆不跟手
+            }, { passive: false });
+
+            // 监听触摸移动
+            zone.addEventListener('touchmove', (e) => {
+                e.preventDefault();
+                if (state.active) updateStick(e);
+            }, { passive: false });
+
+            // 监听触摸结束与意外中断
+            const endJoy = (e) => {
+                e.preventDefault();
+                // 只有当这个区域内没有手指时才归位
+                if (e.targetTouches.length === 0) {
+                    state.active = false; 
+                    state.x = 0; 
+                    state.y = 0;
+                    stick.style.transform = 'translate(0,0)'; 
+                }
+            };
+            zone.addEventListener('touchend', endJoy, { passive: false });
+            zone.addEventListener('touchcancel', endJoy, { passive: false });
         }
+        
         bindJoy('joy-left', 'stick-l', joyL);
         bindJoy('joy-right', 'stick-r', joyR);
 
