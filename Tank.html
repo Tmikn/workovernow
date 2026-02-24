@@ -296,45 +296,89 @@
 
         const player = createTank(0x9B409E);
 
-        /** --- 4. 核心输入逻辑 (坦克转向模式 + 空气墙) --- **/
+        /** --- 4. 核心输入逻辑 (PC硬核坦克 + 手机绝对方位双摇杆) --- **/
         function updateInputs() {
-            // 底盘旋转 (AD转向)
-            let rotationDir = 0;
-            if (keys['a']) rotationDir += 1;
-            if (keys['d']) rotationDir -= 1;
-            if (joyL.active) rotationDir = -joyL.x; 
-            player.userData.chassis.rotation.y += rotationDir * 0.045;
+            let isMoving = false;
 
-            // 位移 (WS进退)
-            let moveVal = 0;
-            if (keys['w']) moveVal += stats.moveSpeed;
-            if (keys['s']) moveVal -= stats.moveSpeed;
-            if (joyL.active) moveVal = -joyL.y * stats.moveSpeed;
+            // ==========================================
+            // 1. PC 端逻辑 (键盘：WS相对进退，AD原地转向)
+            // ==========================================
+            let pcRotDir = 0;
+            let pcMoveVal = 0;
 
-            if (moveVal !== 0) {
-                const dir = new THREE.Vector3(0, 0, 1).applyQuaternion(player.userData.chassis.quaternion);
-                player.position.add(dir.multiplyScalar(moveVal));
+            if (keys['a']) pcRotDir += 1;
+            if (keys['d']) pcRotDir -= 1;
+            if (keys['w']) pcMoveVal += stats.moveSpeed;
+            if (keys['s']) pcMoveVal -= stats.moveSpeed;
+
+            // PC端发生操作时
+            if (pcRotDir !== 0 || pcMoveVal !== 0) {
+                // 原地转向 (保留原本的 0.045 速度)
+                player.userData.chassis.rotation.y += pcRotDir * 0.045; 
+                
+                // 相对车头方向位移
+                if (pcMoveVal !== 0) {
+                    const dir = new THREE.Vector3(0, 0, 1).applyQuaternion(player.userData.chassis.quaternion);
+                    player.position.add(dir.multiplyScalar(pcMoveVal));
+                    if (keys['w']) isMoving = true; // 只有按 W 前进时才算作触发拖尾的“移动”
+                }
             }
 
+            // ==========================================
+            // 2. 手机端逻辑 (左摇杆：绝对方向位移 + 平滑转向)
+            // ==========================================
+            if (joyL.active) {
+                const moveX = joyL.x;
+                const moveZ = joyL.y; 
+                const length = Math.sqrt(moveX * moveX + moveZ * moveZ);
+
+                // 添加一点摇杆死区，防止误触
+                if (length > 0.1) {
+                    // (1) 绝对位移：往哪推就往哪走
+                    const normX = moveX / length;
+                    const normZ = moveZ / length;
+                    
+                    // 根据推摇杆的力度计算速度
+                    const speedMult = Math.min(length, 1) * stats.moveSpeed;
+                    player.position.x += normX * speedMult;
+                    player.position.z += normZ * speedMult;
+
+                    // (2) 底盘平滑转向：让车头转向摇杆方向，【严格保留 0.045 的转向速度】
+                    const targetAngle = Math.atan2(normX, normZ);
+                    const targetQ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), targetAngle);
+                    
+                    // rotateTowards 的第二个参数是每次渲染转动的最大弧度，0.045 完美还原之前的重量感
+                    player.userData.chassis.quaternion.rotateTowards(targetQ, 0.045); 
+                    
+                    isMoving = true; // 摇杆推了就算移动
+                }
+            }
+
+            // 保存移动状态，供拖尾系统读取
+            player.userData.isMoving = isMoving;
+
+            // ==========================================
+            // 3. 通用逻辑 (空气墙与炮塔转向)
+            // ==========================================
             // 空气墙硬限制
             if (player.position.length() > MAP_SIZE) {
                 player.position.setLength(MAP_SIZE);
             }
 
             // 炮塔平滑指向
-            let targetAngle = player.userData.turretGroup.rotation.y;
+            let targetAngleTurret = player.userData.turretGroup.rotation.y;
             if (joyR.active) {
-                targetAngle = Math.atan2(-joyR.x, -joyR.y);
+                targetAngleTurret = Math.atan2(-joyR.x, -joyR.y);
             } else {
                 raycaster.setFromCamera(mouse, camera);
                 const intersects = raycaster.intersectObject(floor);
                 if (intersects.length > 0) {
                     const pt = intersects[0].point;
-                    targetAngle = Math.atan2(pt.x - player.position.x, pt.z - player.position.z);
+                    targetAngleTurret = Math.atan2(pt.x - player.position.x, pt.z - player.position.z);
                 }
             }
-            const targetQ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), targetAngle);
-            player.userData.turretGroup.quaternion.rotateTowards(targetQ, stats.turretSpeed);
+            const targetQTurret = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), targetAngleTurret);
+            player.userData.turretGroup.quaternion.rotateTowards(targetQTurret, stats.turretSpeed);
         }
 
         /** --- 5. 战斗与循环 --- **/
@@ -386,8 +430,8 @@
             // --- 1. 拖尾生成逻辑 ---
             // 判断是否在前进 (按W 或 左摇杆向上推)
             const isMovingForward = keys['w'] || (joyL.active && joyL.y < -0.2);
-            // 降低生成频率（每隔2帧生成一次），防止粒子过多导致卡顿
-            if (isMovingForward) {
+
+            if (player.userData.isMoving) {
                 spawnTrail();
             }
 
