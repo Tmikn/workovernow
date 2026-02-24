@@ -874,7 +874,7 @@
         ];
 
         function gainExp(n) {
-            exp += n*10; score += 10;
+            exp += n; score += 10;
             if (exp >= expNeeded) {
                 level++; exp = 0; expNeeded = Math.floor(expNeeded * 1.3) + 3;
                 showUpgrade();
