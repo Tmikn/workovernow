@@ -98,6 +98,7 @@
         let playerHP = 100, maxHP = 100;
         const MAP_SIZE = 200;
         const enemies = [], bullets = [], keys = {};
+        const debrisParticles = [];
 
         /** --- 音效资源配置 --- **/
         // 射击音效 (高音、短促)
@@ -420,6 +421,54 @@
             trailParticles.push(p);
         }
 
+        function createExplosion(pos, color) {
+            // 1. 爆炸核心闪光 (瞬间爆亮的点光源)
+            const flash = new THREE.PointLight(0xffaa00, 3.0, 15);
+            flash.position.copy(pos);
+            flash.position.y += 1.0;
+            scene.add(flash);
+            
+            // 把闪光加入数组，利用生命周期让它迅速变暗
+            debrisParticles.push({ mesh: flash, isLight: true, life: 1.0, decay: 0.15 });
+
+            // 2. 生成装甲碎块 (8~12 块随机碎片)
+            const pieceCount = 8 + Math.floor(Math.random() * 5);
+            for (let i = 0; i < pieceCount; i++) {
+                // 随机尺寸
+                const size = 0.3 + Math.random() * 0.4;
+                const geo = new THREE.BoxGeometry(size, size, size);
+                // 材质继承死掉坦克的颜色，但稍微暗一点模拟烧焦
+                const mat = new THREE.MeshPhongMaterial({ color: color });
+                const piece = new THREE.Mesh(geo, mat);
+
+                piece.position.copy(pos);
+                piece.position.y += 0.8;
+
+                // 物理属性：赋予一个向上的抛物线初速度，并向四周炸开
+                const velocity = new THREE.Vector3(
+                    (Math.random() - 0.5) * 1.2,
+                    Math.random() * 0.8 + 0.4, // 向上抛的力
+                    (Math.random() - 0.5) * 1.2
+                );
+
+                // 随机的翻滚速度
+                const rotSpeed = new THREE.Vector3(
+                    Math.random() * 0.4 - 0.2,
+                    Math.random() * 0.4 - 0.2,
+                    Math.random() * 0.4 - 0.2
+                );
+
+                scene.add(piece);
+                debrisParticles.push({
+                    mesh: piece,
+                    isLight: false,
+                    velocity: velocity,
+                    rotSpeed: rotSpeed,
+                    life: 1.0,
+                    decay: 0.015 + Math.random() * 0.02 // 随机消失速度
+                });
+            }
+        }
 
         function animate() {
             if (!gameActive) return;
@@ -456,6 +505,49 @@
                     scene.remove(p);
                     p.material.dispose(); 
                     trailParticles.splice(i, 1);
+                }
+            }
+
+            // ---2.5 插入部分：爆炸碎块物理模拟 ---
+            for (let i = debrisParticles.length - 1; i >= 0; i--) {
+                const p = debrisParticles[i];
+                p.life -= p.decay;
+
+                if (p.isLight) {
+                    // 光源迅速变暗
+                    p.mesh.intensity = p.life * 3.0;
+                } else {
+                    // 碎块受重力影响下坠
+                    p.velocity.y -= 0.05; 
+                    p.mesh.position.add(p.velocity);
+                    // 碎块空中翻滚
+                    p.mesh.rotation.x += p.rotSpeed.x;
+                    p.mesh.rotation.y += p.rotSpeed.y;
+                    p.mesh.rotation.z += p.rotSpeed.z;
+
+                    // 落地反弹逻辑
+                    if (p.mesh.position.y < 0.2) {
+                        p.mesh.position.y = 0.2;
+                        p.velocity.y *= -0.4; // 触地反弹，动能衰减
+                        p.velocity.x *= 0.8;  // 触地摩擦力
+                        p.velocity.z *= 0.8;
+                    }
+
+                    // 临近消失时逐渐缩小
+                    if (p.life < 0.4) {
+                        const scale = p.life * 2.5;
+                        p.mesh.scale.set(scale, scale, scale);
+                    }
+                }
+
+                // 生命周期结束，清理内存
+                if (p.life <= 0) {
+                    scene.remove(p.mesh);
+                    if (!p.isLight) {
+                        p.mesh.geometry.dispose();
+                        p.mesh.material.dispose();
+                    }
+                    debrisParticles.splice(i, 1);
                 }
             }
 
@@ -504,12 +596,14 @@
                             enemies[j].userData.hpBar.scale.x = hpPercent;
 
                             // 变色逻辑：血量低于一半变黄，低于 20% 变红
-                            if (hpPercent < 0.2) enemies[j].userData.hpBar.material.color.setHex(0xff0000);
-                            else if (hpPercent < 0.5) enemies[j].userData.hpBar.material.color.setHex(0xffff00);
+                            if (hpPercent <= 0.2) enemies[j].userData.hpBar.material.color.setHex(0xff0000);
+                            else if (hpPercent <= 0.5) enemies[j].userData.hpBar.material.color.setHex(0xffff00);
                             // --------------------------
                             if (b.userData.hp <= 0 && !b.userData.dead) {
                                 b.userData.dead = true; // 防止一帧内重复触发wwwww
                                 playSound(explodeSound);
+                                // --- 插入触发爆炸 (传入敌人坐标和红色) ---
+                                createExplosion(b.position.clone(), 0xA9A9A9);
                                 scene.remove(b);
                                 enemies.splice(enemies.indexOf(b), 1);
                                 gainExp(1);
@@ -542,14 +636,17 @@
                             enemies[j].userData.hpBar.scale.x = hpPercent;
                             
                             // 变色逻辑：血量低于一半变黄，低于 20% 变红
-                            if (hpPercent < 0.2) enemies[j].userData.hpBar.material.color.setHex(0xff0000);
-                            else if (hpPercent < 0.5) enemies[j].userData.hpBar.material.color.setHex(0xffff00);
+                            if (hpPercent <= 0.2) enemies[j].userData.hpBar.material.color.setHex(0xff0000);
+                            else if (hpPercent <= 0.5) enemies[j].userData.hpBar.material.color.setHex(0xffff00);
                             // --------------------------
                             scene.remove(b); bullets.splice(i, 1); // 子弹销毁
                             
                             // 判断敌人是否死亡
                             if (enemies[j].userData.hp <= 0) {
                                 playSound(explodeSound);
+
+                                // --- 插入触发爆炸 ---
+                                createExplosion(enemies[j].position.clone(), 0xA9A9A9);
                                 scene.remove(enemies[j]); enemies.splice(j, 1);
                                 gainExp(1); 
                             }
@@ -558,7 +655,15 @@
                     }
                 } else if (b.position.distanceTo(player.position) < 1.8) {
                     playerHP -= 15; scene.remove(b); bullets.splice(i, 1);
-                    updateUI(); if (playerHP <= 0) triggerGameOver();
+                    updateUI(); 
+                    if (playerHP <= 0) 
+                    {
+                        // --- 玩家炸成紫色碎片 ---
+                        createExplosion(player.position.clone(), 0x9B409E);
+                        // 让玩家模型暂时消失
+                        player.visible = false; 
+                        triggerGameOver();
+                    }
                 }
 }
 
