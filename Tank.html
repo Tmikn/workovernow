@@ -328,8 +328,8 @@
             // 2. 手机端逻辑 (左摇杆：绝对方向位移 + 平滑转向)
             // ==========================================
             if (joyL.active) {
-                const moveX = joyL.x;
-                const moveZ = joyL.y; 
+                const moveX = -joyL.x;
+                const moveZ = -joyL.y; 
                 const length = Math.sqrt(moveX * moveX + moveZ * moveZ);
 
                 // 添加一点摇杆死区，防止误触
