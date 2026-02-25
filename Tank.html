@@ -112,7 +112,8 @@
                 servoName: "伺服电机", servoDesc: "炮塔转向响应大幅提升",
                 ramName: "重型冲角", ramDesc: "对撞击到的敌人造成持续伤害",
                 dmgName: "贫铀穿甲弹", dmgDesc: "主炮基础伤害提升 30 点",
-                laserName: "高能激光束", laserDesc: "在炮塔侧面加装激光器，再次升级增加持续时间与伤害"
+                laserName: "高能激光束", laserDesc: "在炮塔侧面加装激光器，再次升级增加持续时间与伤害",
+                sentryName: "浮游哨戒炮", sentryDesc: "增加一台自动锁定并攻击敌人的悬浮机炮，最多叠加4台"
             },
             en: {
                 title: "TANK: COMBAT", start: "INITIALIZE SYSTEM", tips: "[ W/S Move | A/D Turn | Mouse Aim ]",
@@ -130,7 +131,8 @@
                 servoName: "Servo Motor", servoDesc: "Drastically increases turret rotation speed",
                 ramName: "Spiked Bumper", ramDesc: "Deals continuous damage to rammed enemies",
                 dmgName: "DU Shells", dmgDesc: "Increases base damage by 30",
-                laserName: "Energy Laser", laserDesc: "Mounts a laser. Upgrading increases duration and damage"
+                laserName: "Energy Laser", laserDesc: "Mounts a laser. Upgrading increases duration and damage",
+                sentryName: "Auto Sentry", sentryDesc: "Adds a hovering drone that auto-targets enemies. Max 4"
             }
         };
 
@@ -207,7 +209,11 @@
             laserLevel: 0,        // 激光等级 (0代表还没获得)
             laserDuration: 300,   // 激光持续时间 (毫秒)，初始0.3秒
             laserCooldown: 3000,  // 激光冷却时间 (3秒发射一次)
-            laserLastFire: 0      // 上次发射时间记录
+            laserLastFire: 0,      // 上次发射时间记录
+
+            sentryCount: 0,        // 哨戒炮数量 (初始0，最高4)
+            sentryFireRate: 800,   // 哨戒炮射击间隔 (毫秒)
+            sentryRange: 50        // 索敌范围
         };
 
         const mouse = new THREE.Vector2();
@@ -370,7 +376,33 @@
                 group.userData.laserEmitter = laserEmitter;
                 group.userData.laserBeam = laserBeam;
             }
+// --- 插入部分：浮游哨戒炮 (预生成4个) ---
+                const sentries = [];
+                const sentryGeo = new THREE.BoxGeometry(0.5, 0.3, 0.5);
+                const sentryMat = new THREE.MeshPhongMaterial({ color: 0x00f2ff }); // 青色高科技涂装
+                const barrelGeo = new THREE.CylinderGeometry(0.06, 0.06, 0.8);
+                barrelGeo.rotateX(Math.PI / 2);
 
+                for (let i = 0; i < 4; i++) {
+                    const drone = new THREE.Group();
+                    
+                    // 无人机机体
+                    const body = new THREE.Mesh(sentryGeo, sentryMat);
+                    drone.add(body);
+                    
+                    // 无人机枪管
+                    const droneBarrel = new THREE.Mesh(barrelGeo, new THREE.MeshPhongMaterial({color: 0x333333}));
+                    droneBarrel.position.set(0, 0, 0.4);
+                    drone.add(droneBarrel);
+
+                    drone.visible = false; // 默认隐藏
+                    // 把无人机直接挂在顶层 group 上，这样它只会跟着移动，不会跟着底盘乱转
+                    group.add(drone); 
+                    
+                    // 记录它的独立开火时间和环绕角度
+                    sentries.push({ model: drone, lastFire: 0, angle: (Math.PI / 2) * i }); 
+                }
+                group.userData.sentries = sentries;
             // --- 给敌人添加 3D 血条 ---
             if (color !== 0x9B409E) { 
                 const hpGroup = new THREE.Group();
@@ -796,6 +828,75 @@
                     }
                 }
             }
+            // --- 插入部分：哨戒炮 AI 逻辑 ---
+            if (stats.sentryCount > 0) {
+                const now = Date.now();
+                
+                for (let i = 0; i < stats.sentryCount; i++) {
+                    const s = player.userData.sentries[i];
+                    const droneMesh = s.model;
+
+                    // 1. 极其酷炫的环绕飞行效果
+                    s.angle += 0.02; // 环绕速度
+                    droneMesh.position.x = Math.cos(s.angle) * 4.0; // 环绕半径 4.0
+                    droneMesh.position.z = Math.sin(s.angle) * 4.0;
+                    // 上下规律浮动模拟悬浮引擎
+                    droneMesh.position.y = 2.0 + Math.sin(now * 0.005 + i) * 0.4; 
+
+                    // 2. 雷达索敌：寻找射程内最近的敌人
+                    let nearestEn = null;
+                    let minDist = stats.sentryRange;
+                    
+                    // 获取无人机在地图上的绝对坐标
+                    const droneWorldPos = new THREE.Vector3();
+                    droneMesh.getWorldPosition(droneWorldPos);
+
+                    for (let j = 0; j < enemies.length; j++) {
+                        const dist = droneWorldPos.distanceTo(enemies[j].position);
+                        if (dist < minDist) {
+                            minDist = dist;
+                            nearestEn = enemies[j];
+                        }
+                    }
+
+                    // 3. 瞄准与开火
+                    if (nearestEn) {
+                        // 让无人机看向敌人 (高度设为与无人机平齐，防止枪管朝地上指)
+                        droneMesh.lookAt(nearestEn.position.x, droneMesh.position.y + player.position.y, nearestEn.position.z);
+
+                        if (now - s.lastFire > stats.sentryFireRate) {
+                            s.lastFire = now;
+                            // 借用开火音效
+                            playSound(fireSound);
+                            
+                            // 独立生成哨戒炮的微型子弹
+                            const b = new THREE.Mesh(
+                                new THREE.SphereGeometry(0.18), // 子弹比较小
+                                new THREE.MeshBasicMaterial({ color: 0x00f2ff })
+                            );
+                            
+                            // 从无人机枪口位置射出
+                            b.position.copy(droneWorldPos);
+                            
+                            // 计算飞向敌人的方向向量
+                            const dir = new THREE.Vector3().subVectors(nearestEn.position, droneWorldPos).normalize();
+                            
+                            // 哨戒炮子弹速度略快一点，伤害可以绑定基础子弹伤害的一半
+                            b.userData = { 
+                                velocity: dir.multiplyScalar(stats.bulletSpeed * 1.5), 
+                                owner: 'p',
+                                isSentry: true // 做个标记，如果你想让它伤害低一点
+                            }; 
+                            bullets.push(b); 
+                            scene.add(b);
+                        }
+                    } else {
+                        // 没发现敌人时，机炮待机转圈，朝向坦克前方
+                        droneMesh.rotation.y = 0; 
+                    }
+                }
+            }
+            // ----------------------------------------
             // ----------------------------------------
             // --- 7. 子弹处理 ---
             for (let i = bullets.length - 1; i >= 0; i--) {
@@ -851,23 +952,33 @@
 
 /** --- 6. 升级系统 (支持多语言重构) --- **/
         const upgradePool = [
-            { id: 'fire',  act: () => stats.multiShot++ },
-            { id: 'rate',  act: () => stats.fireRate *= 0.75 },
+            { id: 'fire', act: () => stats.multiShot++ },
+            { id: 'rate', act: () => stats.fireRate *= 0.75 },
             { id: 'speed', act: () => stats.moveSpeed += 0.05 },
-            { id: 'size',  act: () => stats.bulletSize += 0.6 },
-            { id: 'hull',  act: () => { maxHP += 25; playerHP = Math.min(maxHP, playerHP + 50); } },
+            { id: 'size', act: () => stats.bulletSize += 0.6 },
+            { id: 'hull', act: () => { maxHP += 25; playerHP = Math.min(maxHP, playerHP + 50); } },
             { id: 'servo', act: () => stats.turretSpeed += 0.04 },
-            { id: 'ram',   act: () => stats.ramDamage += 0.5 },
-            { id: 'dmg',   act: () => stats.bulletDamage += 30 },
-            { id: 'laser', 
-                act: () => { 
-                    stats.laserLevel++; 
+            { id: 'ram', act: () => stats.ramDamage += 0.5 },
+            { id: 'dmg', act: () => stats.bulletDamage += 30 },
+            {
+                id: 'laser',
+                act: () => {
+                    stats.laserLevel++;
                     if (stats.laserLevel === 1) {
                         // 第一次获得：模型显现！
                         player.userData.laserEmitter.visible = true;
                     } else {
                         // 再次获得：每次增加 0.25 秒持续时间
-                        stats.laserDuration += 250; 
+                        stats.laserDuration += 250;
+                    }
+                }
+            },
+{ 
+                id: 'sentry', 
+                act: () => { 
+                    if (stats.sentryCount < 4) {
+                        player.userData.sentries[stats.sentryCount].model.visible = true;
+                        stats.sentryCount++;
                     }
                 } 
             }
@@ -882,18 +993,34 @@
             updateUI();
         }
 
-function showUpgrade() {
+        function showUpgrade() {
             gameActive = false;
             document.getElementById('pause-trigger').style.display = 'none';
             const container = document.getElementById('upgrade-options');
             container.innerHTML = '';
-            const opts = [...upgradePool].sort(() => 0.5 - Math.random()).slice(0, 3);
             
+            // --- 插入部分：动态过滤卡池 ---
+            const availableUpgrades = upgradePool.filter(opt => {
+                // 如果是哨戒炮，且数量已经达到上限(4个)，就把它从本次抽卡池中踢出去
+                if (opt.id === 'sentry' && stats.sentryCount >= 4) {
+                    return false; 
+                }
+                
+                // 💡 未来扩展提示：如果你想限制激光满级为 5 级，可以接着加：
+                // if (opt.id === 'laser' && stats.laserLevel >= 5) return false;
+                
+                return true; // 其他卡牌正常保留
+            });
+
+            // 从过滤后的干净卡池中，打乱并抽取 3 个
+            const opts = [...availableUpgrades].sort(() => 0.5 - Math.random()).slice(0, 3);
+            // -----------------------------
+
             opts.forEach(opt => {
                 const card = document.createElement('div');
                 card.className = 'upgrade-card';
                 
-                // 【核心修改】：从当前语言字典中动态读取卡片名字和描述
+                // 从当前语言字典中动态读取卡片名字和描述
                 const nameText = dict[currentLang][opt.id + 'Name'];
                 const descText = dict[currentLang][opt.id + 'Desc'];
                 
@@ -949,32 +1076,72 @@ function showUpgrade() {
         }
 
         // 绑定重启按钮
+
         document.getElementById('btn-restart').onclick = function() {
-            // 1. 重置数值
+            // 1. 重置基础数值
             playerHP = 100;
             maxHP = 100;
             score = 0;
             level = 1;
             exp = 0;
             expNeeded = 5;
-            stats.multiShot = 1; // 重置部分关键升级（可选）
-            
-            // 2. 清理现场
-            enemies.forEach(en => scene.remove(en));
+
+            // 2. 重置所有升级属性到初始状态
+            stats.moveSpeed = 0.22;
+            stats.fireRate = 800;
+            stats.bulletSize = 0.35;
+            stats.bulletSpeed = 1.25;
+            stats.multiShot = 1;
+            stats.turretSpeed = 0.065;
+            stats.bulletDamage = 50;
+            stats.ramDamage = 0;
+
+            // 3. 重置激光模块状态
+            stats.laserLevel = 0;
+            stats.laserDuration = 300;
+            if (player.userData.laserEmitter) {
+                player.userData.laserEmitter.visible = false;
+                player.userData.laserBeam.visible = false;
+                player.userData.isLaserActive = false;
+            }
+
+            // 4. 重置哨戒炮模块状态
+            stats.sentryCount = 0;
+            stats.sentryFireRate = 800;
+            if (player.userData.sentries) {
+                player.userData.sentries.forEach(s => s.model.visible = false);
+            }
+
+            // 5. 清理战场上的敌人和子弹
+            enemies.forEach(en => {
+                if (en.userData.hpGroup) scene.remove(en.userData.hpGroup);
+                scene.remove(en);
+            });
             bullets.forEach(b => scene.remove(b));
             enemies.length = 0;
             bullets.length = 0;
             
-            // 3. 重置玩家位置
+            // 6. 清理上一局残留的爆炸碎片和闪光
+            debrisParticles.forEach(p => {
+                scene.remove(p.mesh);
+                if (!p.isLight && p.mesh.geometry) {
+                    p.mesh.geometry.dispose();
+                    p.mesh.material.dispose();
+                }
+            });
+            debrisParticles.length = 0;
+
+            // 7. 玩家满血复活：归位并重新显示！
             player.position.set(0, 0, 0);
-            
-            // 4. UI与状态恢复
+            player.visible = true; // <--- 就是这里修复了隐形问题
+
+            // 8. 恢复 UI 与游戏循环
             updateUI();
             document.getElementById('gameover-overlay').style.display = 'none';
             gameActive = true;
-            bgm.currentTime = 0; // 音乐从头开始
+            bgm.currentTime = 0; 
             bgm.play();
-            animate(); // 重新启动循环
+            animate(); 
         };
 
         /** --- 暂停状态管理 --- **/
