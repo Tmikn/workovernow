@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>公共留言板</title>
     <style>
+        /* CSS 样式保持你原来的不变 */
         :root {
             --primary-color: #4a90e2;
             --bg-color: #f0f2f5;
@@ -53,9 +54,10 @@
             margin: 5px 0 0;
             font-size: 0.9rem;
             color: var(--text-sub);
+            /* 给格言加一点平滑切换的动画效果 */
+            transition: opacity 0.5s ease;
         }
 
-        /* 输入框卡片 */
         .post-card {
             background: var(--card-bg);
             border-radius: 12px;
@@ -112,13 +114,11 @@
             cursor: not-allowed;
         }
 
-        /* 留言列表卡片 */
         .messages-card {
             background: var(--card-bg);
             border-radius: 12px;
             padding: 20px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-            /* 用于平滑滚动的锚点定位 */
             scroll-margin-top: 20px; 
         }
 
@@ -169,7 +169,6 @@
             padding: 20px 0;
         }
 
-        /* --- 翻页组件样式 --- */
         .pagination {
             display: flex;
             justify-content: center;
@@ -218,7 +217,7 @@
     <div class="container">
         <div class="header">
             <h1>💬 B岛匿名板</h1>
-            <p>人是会思考的芦苇</p>
+            <p id="quote-text">人是会思考的芦苇</p>
         </div>
 
         <div class="post-card">
@@ -241,18 +240,39 @@
     </div>
 
     <script>
-        // --- Supabase 初始化配置 ---
         const SUPABASE_URL = 'https://hnzrjedtrjxgdverackz.supabase.co'; 
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhuenJqZWR0cmp4Z2R2ZXJhY2t6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAzMzQxNjIsImV4cCI6MjA4NTkxMDE2Mn0.ZK5y7uGXJ-nqednVzK7wL1GTxmA4DQSq34IcO88GcgQ'; 
 
         const { createClient } = supabase;
         const _supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-        // --- 翻页全局状态 ---
-        let currentPage = 1;
-        const PAGE_SIZE = 10; // 每页显示 10 条留言，你可以随意修改这个值
+        // --- 关键修改 2：新建格言库 ---
+        const quotes = [
+            "人是会思考的芦苇。",
+            "凡是可以说的东西，都可以说得清楚；对于不可说的东西，我们必须保持沉默。",
+            "你跑在前面？——你是作为牧羊人，还是作为例外？第三种可能则是逃兵……第一个良心问题。",
+            "你是真实的？还是仅仅是个戏子？是一个代表，还是被代表的东西本身？最后你或许只是一个戏子的仿制品……第二个良心问题。",
+            "你是旁观者？还是动手干活的人？——抑或你是移开视线、掉头走开的人？……第三个良心问题。",
+            "你想随行？或是走在前面？或是独自走开？……人必须知道自己想要什么，并且知道自己是在‘想要’。……第四个良心问题。",
+            "有两样东西，我们愈经常愈持久地加以思索，它们就愈使心灵充满日新月异、有加无已的景仰和敬畏：在我之上的星空和居我心中的道德法则。",
+            "人是目的，绝非手段。"
+        ];
 
-        // --- 辅助函数 ---
+        // 随机替换格言的函数
+        function setRandomQuote() {
+            const quoteElement = document.getElementById('quote-text');
+            const randomIndex = Math.floor(Math.random() * quotes.length);
+            // 这里用一点小透明度动画让切换看起来更自然
+            quoteElement.style.opacity = 0;
+            setTimeout(() => {
+                quoteElement.textContent = quotes[randomIndex];
+                quoteElement.style.opacity = 1;
+            }, 100);
+        }
+
+        let currentPage = 1;
+        const PAGE_SIZE = 10; 
+
         function escapeHTML(str) {
             return str.replace(/</g, "&lt;").replace(/>/g, "&gt;");
         }
@@ -273,18 +293,15 @@
             return `${m}-${d} ${h}:${min}`;
         }
 
-        // --- 核心拉取逻辑 (带翻页) ---
         async function fetchMessages(page = 1) {
             currentPage = page;
             const list = document.getElementById('message-list');
             list.innerHTML = '<div class="loading">正在加载留言...</div>';
 
-            // 计算该页对应的数据范围 (比如第1页是 0~9，第2页是 10~19)
             const from = (currentPage - 1) * PAGE_SIZE;
             const to = from + PAGE_SIZE - 1;
 
             try {
-                // select 第一个参数写要查的字段，第二个参数要求返回总数 { count: 'exact' }
                 const { data, error, count } = await _supabase
                     .from('messages')
                     .select('name, content, created_at', { count: 'exact' })
@@ -295,11 +312,10 @@
 
                 if (count === 0) {
                     list.innerHTML = '<div class="loading">暂无留言，快来抢沙发吧！</div>';
-                    document.getElementById('pagination-container').innerHTML = ''; // 清空翻页
+                    document.getElementById('pagination-container').innerHTML = ''; 
                     return;
                 }
 
-                // 渲染留言列表
                 list.innerHTML = ''; 
                 data.forEach(item => {
                     const li = document.createElement('li');
@@ -319,7 +335,6 @@
                     list.appendChild(li);
                 });
 
-                // 渲染底部的翻页组件
                 renderPagination(count);
 
             } catch (err) {
@@ -328,12 +343,10 @@
             }
         }
 
-        // --- 渲染翻页按钮 ---
         function renderPagination(totalCount) {
             const totalPages = Math.ceil(totalCount / PAGE_SIZE) || 1;
             const container = document.getElementById('pagination-container');
             
-            // 如果只有 1 页，则不显示翻页栏
             if (totalPages <= 1) {
                 container.innerHTML = '';
                 return;
@@ -352,14 +365,11 @@
             `;
         }
 
-        // --- 切换页码触发 ---
         function changePage(newPage) {
             fetchMessages(newPage);
-            // 翻页后，平滑滚动回到留言列表的顶部，优化阅读体验
             document.getElementById('messages-card').scrollIntoView({ behavior: 'smooth' });
         }
 
-        // --- 提交留言 ---
         async function submitMessage() {
             const nameInput = document.getElementById('author-name');
             const contentInput = document.getElementById('author-content');
@@ -369,7 +379,7 @@
             let content = contentInput.value.trim();
 
             if (!content) {
-                alert("留言内容不能为空哦！");
+                alert("留下一句暴论再走吧！");
                 contentInput.focus();
                 return;
             }
@@ -385,7 +395,6 @@
                 if (error) throw error;
 
                 contentInput.value = '';
-                // 发布成功后，强制跳回第1页看最新留言
                 await fetchMessages(1); 
                 
             } catch (err) {
@@ -397,8 +406,11 @@
             }
         }
 
-        // 初始化：页面加载完成后拉取第 1 页
-        window.addEventListener('DOMContentLoaded', () => fetchMessages(1));
+        // --- 关键修改 3：初始化时同时加载格言和留言 ---
+        window.addEventListener('DOMContentLoaded', () => {
+            setRandomQuote();
+            fetchMessages(1);
+        });
     </script>
 </body>
 </html>
