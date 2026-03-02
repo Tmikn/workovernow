@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>西部快枪手</title>
     <style>
         body {
@@ -17,26 +17,32 @@
             height: 100vh;
             user-select: none; 
             overflow: hidden;
-            /* 新增下面这一行，禁用浏览器默认的触摸手势（如滑动、双击放大） */
             touch-action: none; 
         }
 
         #game-container {
             text-align: center;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
         }
 
         #status-text {
-            font-size: 36px;
+            font-size: 32px;
             font-weight: bold;
             color: #3e2723;
-            height: 50px;
+            height: 80px;
             margin-bottom: 20px;
+            padding: 0 20px;
         }
 
         #enemy {
             width: 150px;
             height: 150px;
-            background-color: #5d4037; /* 默认牛仔颜色 */
+            background-color: #5d4037;
             border-radius: 10px;
             margin: 0 auto;
             transition: background-color 0.1s;
@@ -44,7 +50,7 @@
             align-items: center;
             justify-content: center;
             color: white;
-            font-size: 24px;
+            font-size: 50px; 
             box-shadow: 0 4px 8px rgba(0,0,0,0.3);
         }
 
@@ -52,51 +58,175 @@
             margin-top: 30px;
             font-size: 24px;
             color: #3e2723;
+            font-weight: bold;
         }
 
-        /* 敌人拔枪时的红色警告状态 */
         .draw-state {
             background-color: #d32f2f !important;
         }
+
+        /* --- 这里是你之前漏掉的排行榜 UI 样式 --- */
+        #btn-leaderboard {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            padding: 8px 15px;
+            background-color: #5d4037;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-family: inherit;
+            font-size: 16px;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            z-index: 10;
+        }
+
+        #leaderboard-modal {
+            display: none; 
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            z-index: 100;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            background-color: #f4e4bc; 
+            border: 4px solid #5d4037;
+            border-radius: 12px;
+            padding: 25px;
+            width: 80%;
+            max-width: 320px;
+            text-align: center;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+        }
+
+        .modal-content h2 {
+            margin-top: 0;
+            color: #3e2723;
+            border-bottom: 2px dashed #5d4037;
+            padding-bottom: 10px;
+        }
+
+        #submit-area {
+            display: none;
+            margin-bottom: 20px;
+        }
+
+        #player-name {
+            width: 80%;
+            padding: 10px;
+            font-size: 16px;
+            font-family: inherit;
+            margin-bottom: 10px;
+            border: 2px solid #5d4037;
+            border-radius: 5px;
+            text-align: center;
+        }
+
+        #scores-list {
+            list-style: none;
+            padding: 0;
+            margin: 0 0 20px 0;
+            max-height: 200px;
+            overflow-y: auto;
+            text-align: left;
+            color: #3e2723;
+            font-weight: bold;
+        }
+
+        #scores-list li {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(93, 64, 55, 0.2);
+        }
+
+        .btn {
+            padding: 10px 20px;
+            background-color: #5d4037;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-family: inherit;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .btn.cancel {
+            background-color: #8d6e63;
+        }
     </style>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
 
+    <button id="btn-leaderboard" onclick="openLeaderboard(false)">🏆 全服悬赏榜</button>
+    
     <div id="game-container">
-        <div id="status-text">点击任意位置开始</div>
+        <div id="status-text">点击屏幕开始对决</div>
         <div id="enemy">🤠</div>
-        <div id="score-board">得分: <span id="score">0</span></div>
+        <div id="score-board">当前连杀: <span id="score">0</span></div>
+    </div>
+
+    <div id="leaderboard-modal">
+        <div class="modal-content">
+            <h2 id="modal-title">全服排行榜</h2>
+            
+            <div id="submit-area">
+                <p>你连杀了 <span id="final-score" style="color:#d32f2f; font-size: 24px;">0</span> 个敌人！</p>
+                <input type="text" id="player-name" placeholder="留下你的大名" maxlength="8">
+                <br>
+                <button class="btn" onclick="submitScore()">提交战绩</button>
+            </div>
+
+            <div id="list-area">
+                <ul id="scores-list">
+                    </ul>
+            </div>
+
+            <button class="btn cancel" onclick="closeLeaderboard()">返回荒野</button>
+        </div>
     </div>
 
     <script>
-        // 游戏状态和变量
-        let state = 'idle'; // 状态: idle(空闲), waiting(等待), react(反应), gameover(结束)
+        // --- Supabase 初始化配置 ---
+        const SUPABASE_URL = 'https://hnzrjedtrjxgdverackz.supabase.co'; 
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhuenJqZWR0cmp4Z2R2ZXJhY2t6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAzMzQxNjIsImV4cCI6MjA4NTkxMDE2Mn0.ZK5y7uGXJ-nqednVzK7wL1GTxmA4DQSq34IcO88GcgQ'; 
+
+        // 创建 Supabase 客户端
+        const { createClient } = supabase;
+        const _supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        // --- 游戏核心逻辑 ---
+        let state = 'idle'; 
         let score = 0;
-        let reactionTimeLimit = 600; // 初始敌人拔枪速度 (毫秒)
+        let reactionTimeLimit = 600; 
         let drawTimeoutId = null;
         let deathTimeoutId = null;
         let startTime = 0;
 
-        // DOM 元素
         const statusText = document.getElementById('status-text');
         const enemy = document.getElementById('enemy');
         const scoreSpan = document.getElementById('score');
 
-        // 使用统一的 pointerdown 事件
-        document.body.addEventListener('pointerdown', handleClick);
-
-        function handleClick(e) {
-            // 防止移动端长按触发菜单
+        document.body.addEventListener('pointerdown', function(e) {
+            if (e.target.closest('#leaderboard-modal') || e.target.closest('#btn-leaderboard')) {
+                return; 
+            }
             e.preventDefault(); 
+            handleClick();
+        });
 
+        function handleClick() {
             if (state === 'idle' || state === 'gameover') {
                 startRound();
             } else if (state === 'waiting') {
-                // 抢跑判定
                 clearTimeout(drawTimeoutId);
                 gameOver("你开枪太早了！走火！");
             } else if (state === 'react') {
-                // 玩家成功反应
                 let reactionTime = Date.now() - startTime;
                 clearTimeout(deathTimeoutId);
                 winRound(reactionTime);
@@ -106,22 +236,16 @@
         function startRound() {
             if (state === 'gameover') {
                 score = 0;
-                reactionTimeLimit = 600; // 重置难度
+                reactionTimeLimit = 600; 
                 scoreSpan.innerText = score;
             }
-
             state = 'waiting';
-            statusText.innerText = "准备...";
+            statusText.innerText = "准备拔枪...";
             statusText.style.color = "#3e2723";
             enemy.classList.remove('draw-state');
             enemy.innerText = "🤠";
-
-            // 随机等待 2 到 5 秒
             let randomDelay = Math.floor(Math.random() * 3000) + 2000;
-            
-            drawTimeoutId = setTimeout(() => {
-                triggerDraw();
-            }, randomDelay);
+            drawTimeoutId = setTimeout(() => { triggerDraw(); }, randomDelay);
         }
 
         function triggerDraw() {
@@ -130,14 +254,9 @@
             statusText.style.color = "#d32f2f";
             enemy.classList.add('draw-state');
             enemy.innerText = "🔫";
-            
             startTime = Date.now();
-
-            // 如果玩家没在限时内点击，敌人就会开枪
             deathTimeoutId = setTimeout(() => {
-                if (state === 'react') {
-                    gameOver("你太慢了，被击中了！");
-                }
+                if (state === 'react') { gameOver("你拔枪太慢了！"); }
             }, reactionTimeLimit);
         }
 
@@ -145,21 +264,110 @@
             state = 'idle';
             score++;
             scoreSpan.innerText = score;
-            statusText.innerText = `命中！反应时间: ${time}ms\n点击继续`;
+            statusText.innerText = `命中！反应: ${time}ms\n点击继续下个敌人`;
             statusText.style.color = "#2e7d32";
             enemy.innerText = "💀";
             enemy.classList.remove('draw-state');
-
-            // 增加难度：敌人拔枪越来越快，极限为 250 毫秒
-            reactionTimeLimit = Math.max(250, reactionTimeLimit - 20); 
+            reactionTimeLimit = Math.max(250, reactionTimeLimit - 25); 
         }
 
         function gameOver(reason) {
             state = 'gameover';
-            statusText.innerText = `${reason}\n点击重新开始`;
+            statusText.innerText = `${reason}\n(点击屏幕重新开始)`;
             statusText.style.color = "#000";
             enemy.innerText = "☠️";
             enemy.classList.remove('draw-state');
+            // 游戏结束后弹出榜单
+            if (score > 0) {
+                setTimeout(() => { openLeaderboard(true); }, 800);
+            }
+        }
+
+        // --- 云端排行榜系统逻辑 ---
+        const modal = document.getElementById('leaderboard-modal');
+        const submitArea = document.getElementById('submit-area');
+        const listArea = document.getElementById('list-area');
+        const scoresList = document.getElementById('scores-list');
+        const modalTitle = document.getElementById('modal-title');
+        const finalScoreSpan = document.getElementById('final-score');
+        const nameInput = document.getElementById('player-name');
+
+        function openLeaderboard(isSubmit) {
+            modal.style.display = 'flex';
+            if (isSubmit) {
+                modalTitle.innerText = "数据录入";
+                submitArea.style.display = 'block';
+                listArea.style.display = 'none';
+                finalScoreSpan.innerText = score;
+                nameInput.value = ""; 
+                nameInput.focus();
+            } else {
+                modalTitle.innerText = "全服排行榜 (Top 10)";
+                submitArea.style.display = 'none';
+                listArea.style.display = 'block';
+                renderLeaderboard(); 
+            }
+        }
+
+        function closeLeaderboard() {
+            modal.style.display = 'none';
+        }
+
+        async function submitScore() {
+            let playerName = nameInput.value.trim();
+            if (!playerName) playerName = "无名枪手";
+
+            const btn = document.querySelector('#submit-area .btn');
+            btn.innerText = "提交中...";
+            btn.disabled = true;
+
+            try {
+                const { error } = await _supabase
+                    .from('leaderboard')
+                    .insert([{ name: playerName, score: score }]);
+
+                if (error) throw error;
+                
+                openLeaderboard(false);
+            } catch (err) {
+                console.error("提交分数失败:", err);
+                alert("网络波动，战绩提交失败！");
+            } finally {
+                btn.innerText = "提交战绩";
+                btn.disabled = false;
+            }
+        }
+
+        async function renderLeaderboard() {
+            scoresList.innerHTML = "<li>牛仔祈祷中...</li>";
+
+            try {
+                const { data, error } = await _supabase
+                    .from('leaderboard')
+                    .select('name, score')
+                    .order('score', { ascending: false }) 
+                    .limit(10); 
+
+                if (error) throw error;
+
+                scoresList.innerHTML = ""; 
+
+                if (data.length === 0) {
+                    scoresList.innerHTML = "<li>荒野上空无一人！</li>";
+                    return;
+                }
+
+                data.forEach((item, index) => {
+                    const li = document.createElement('li');
+                    let medal = ["🥇", "🥈", "🥉"][index] || `${index + 1}.`;
+                    const safeName = item.name.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                    li.innerHTML = `<span>${medal} ${safeName}</span> <span>${item.score} 杀</span>`;
+                    scoresList.appendChild(li);
+                });
+            } catch (err) {
+                console.error("获取排行榜失败:", err);
+                scoresList.innerHTML = "<li style='color: red;'>获取排行榜失败，请稍后再试。</li>";
+            }
         }
     </script>
 </body>
