@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>公共留言板</title>
+    <style>
+        :root {
+            --primary-color: #4a90e2;
+            --bg-color: #f0f2f5;
+            --card-bg: #ffffff;
+            --text-main: #1c1e21;
+            --text-sub: #65676b;
+            --border-color: #e4e6eb;
+        }
+
+        * {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 20px 15px;
+            display: flex;
+            justify-content: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 600px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 10px;
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 1.5rem;
+            color: var(--text-main);
+        }
+
+        .header p {
+            margin: 5px 0 0;
+            font-size: 0.9rem;
+            color: var(--text-sub);
+        }
+
+        /* 输入框卡片 */
+        .post-card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+
+        .input-group {
+            margin-bottom: 15px;
+        }
+
+        input[type="text"], textarea {
+            width: 100%;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 12px;
+            font-size: 1rem;
+            font-family: inherit;
+            background-color: #f7f8fa;
+            transition: all 0.3s;
+            outline: none;
+        }
+
+        input[type="text"]:focus, textarea:focus {
+            background-color: #fff;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.1);
+        }
+
+        textarea {
+            resize: none;
+            height: 100px;
+        }
+
+        .btn-submit {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 12px 24px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            transition: background-color 0.2s;
+        }
+
+        .btn-submit:active {
+            transform: scale(0.98);
+        }
+
+        .btn-submit:disabled {
+            background-color: #a0c3ec;
+            cursor: not-allowed;
+        }
+
+        /* 留言列表卡片 */
+        .messages-card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            /* 用于平滑滚动的锚点定位 */
+            scroll-margin-top: 20px; 
+        }
+
+        .message-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .message-item {
+            padding: 15px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .message-item:last-child {
+            border-bottom: none;
+            padding-bottom: 0;
+        }
+
+        .msg-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .msg-name {
+            font-weight: 600;
+            color: var(--primary-color);
+            font-size: 1rem;
+        }
+
+        .msg-time {
+            font-size: 0.8rem;
+            color: var(--text-sub);
+        }
+
+        .msg-content {
+            font-size: 1rem;
+            line-height: 1.6;
+            word-break: break-word;
+            white-space: pre-wrap;
+        }
+
+        .loading {
+            text-align: center;
+            color: var(--text-sub);
+            padding: 20px 0;
+        }
+
+        /* --- 翻页组件样式 --- */
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+            margin-top: 25px;
+            padding-top: 15px;
+            border-top: 1px dashed var(--border-color);
+        }
+
+        .btn-page {
+            padding: 8px 16px;
+            border: 1px solid var(--border-color);
+            background: #fff;
+            border-radius: 8px;
+            cursor: pointer;
+            color: var(--text-main);
+            font-size: 0.95rem;
+            transition: all 0.2s;
+        }
+
+        .btn-page:hover:not(:disabled) {
+            border-color: var(--primary-color);
+            color: var(--primary-color);
+        }
+
+        .btn-page:disabled {
+            background: #f0f2f5;
+            color: #b0b3b8;
+            cursor: not-allowed;
+            border-color: #e4e6eb;
+        }
+
+        .page-info {
+            font-size: 0.95rem;
+            color: var(--text-sub);
+            font-weight: 500;
+            min-width: 60px;
+            text-align: center;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+
+    <div class="container">
+        <div class="header">
+            <h1>💬 B岛匿名板</h1>
+            <p>人是会思考的芦苇</p>
+        </div>
+
+        <div class="post-card">
+            <div class="input-group">
+                <input type="text" id="author-name" placeholder="你的昵称（选填，默认匿名）" maxlength="15">
+            </div>
+            <div class="input-group">
+                <textarea id="author-content" placeholder="留下你的暴论..." maxlength="300"></textarea>
+            </div>
+            <button id="btn-submit" class="btn-submit" onclick="submitMessage()">发布留言</button>
+        </div>
+
+        <div class="messages-card" id="messages-card">
+            <ul id="message-list" class="message-list">
+                <div class="loading">正在连接数据库...</div>
+            </ul>
+            
+            <div id="pagination-container"></div>
+        </div>
+    </div>
+
+    <script>
+        // --- Supabase 初始化配置 ---
+        const SUPABASE_URL = 'https://hnzrjedtrjxgdverackz.supabase.co'; 
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhuenJqZWR0cmp4Z2R2ZXJhY2t6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAzMzQxNjIsImV4cCI6MjA4NTkxMDE2Mn0.ZK5y7uGXJ-nqednVzK7wL1GTxmA4DQSq34IcO88GcgQ'; 
+
+        const { createClient } = supabase;
+        const _supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        // --- 翻页全局状态 ---
+        let currentPage = 1;
+        const PAGE_SIZE = 10; // 每页显示 10 条留言，你可以随意修改这个值
+
+        // --- 辅助函数 ---
+        function escapeHTML(str) {
+            return str.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        }
+
+        function formatTime(isoString) {
+            const date = new Date(isoString);
+            const now = new Date();
+            const diff = Math.floor((now - date) / 1000); 
+
+            if (diff < 60) return "刚刚";
+            if (diff < 3600) return `${Math.floor(diff / 60)} 分钟前`;
+            if (diff < 86400) return `${Math.floor(diff / 3600)} 小时前`;
+            
+            const m = (date.getMonth() + 1).toString().padStart(2, '0');
+            const d = date.getDate().toString().padStart(2, '0');
+            const h = date.getHours().toString().padStart(2, '0');
+            const min = date.getMinutes().toString().padStart(2, '0');
+            return `${m}-${d} ${h}:${min}`;
+        }
+
+        // --- 核心拉取逻辑 (带翻页) ---
+        async function fetchMessages(page = 1) {
+            currentPage = page;
+            const list = document.getElementById('message-list');
+            list.innerHTML = '<div class="loading">正在加载留言...</div>';
+
+            // 计算该页对应的数据范围 (比如第1页是 0~9，第2页是 10~19)
+            const from = (currentPage - 1) * PAGE_SIZE;
+            const to = from + PAGE_SIZE - 1;
+
+            try {
+                // select 第一个参数写要查的字段，第二个参数要求返回总数 { count: 'exact' }
+                const { data, error, count } = await _supabase
+                    .from('messages')
+                    .select('name, content, created_at', { count: 'exact' })
+                    .order('created_at', { ascending: false })
+                    .range(from, to);
+
+                if (error) throw error;
+
+                if (count === 0) {
+                    list.innerHTML = '<div class="loading">暂无留言，快来抢沙发吧！</div>';
+                    document.getElementById('pagination-container').innerHTML = ''; // 清空翻页
+                    return;
+                }
+
+                // 渲染留言列表
+                list.innerHTML = ''; 
+                data.forEach(item => {
+                    const li = document.createElement('li');
+                    li.className = 'message-item';
+                    
+                    const safeName = escapeHTML(item.name);
+                    const safeContent = escapeHTML(item.content);
+                    const timeStr = formatTime(item.created_at);
+
+                    li.innerHTML = `
+                        <div class="msg-header">
+                            <span class="msg-name">${safeName}</span>
+                            <span class="msg-time">${timeStr}</span>
+                        </div>
+                        <div class="msg-content">${safeContent}</div>
+                    `;
+                    list.appendChild(li);
+                });
+
+                // 渲染底部的翻页组件
+                renderPagination(count);
+
+            } catch (err) {
+                console.error('获取留言失败:', err);
+                list.innerHTML = '<div class="loading" style="color: red;">网络开小差了，留言加载失败。</div>';
+            }
+        }
+
+        // --- 渲染翻页按钮 ---
+        function renderPagination(totalCount) {
+            const totalPages = Math.ceil(totalCount / PAGE_SIZE) || 1;
+            const container = document.getElementById('pagination-container');
+            
+            // 如果只有 1 页，则不显示翻页栏
+            if (totalPages <= 1) {
+                container.innerHTML = '';
+                return;
+            }
+
+            container.innerHTML = `
+                <div class="pagination">
+                    <button class="btn-page" onclick="changePage(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''}>
+                        上一页
+                    </button>
+                    <span class="page-info">${currentPage} / ${totalPages}</span>
+                    <button class="btn-page" onclick="changePage(${currentPage + 1})" ${currentPage === totalPages ? 'disabled' : ''}>
+                        下一页
+                    </button>
+                </div>
+            `;
+        }
+
+        // --- 切换页码触发 ---
+        function changePage(newPage) {
+            fetchMessages(newPage);
+            // 翻页后，平滑滚动回到留言列表的顶部，优化阅读体验
+            document.getElementById('messages-card').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // --- 提交留言 ---
+        async function submitMessage() {
+            const nameInput = document.getElementById('author-name');
+            const contentInput = document.getElementById('author-content');
+            const btn = document.getElementById('btn-submit');
+
+            let name = nameInput.value.trim() || "匿名用户";
+            let content = contentInput.value.trim();
+
+            if (!content) {
+                alert("留言内容不能为空哦！");
+                contentInput.focus();
+                return;
+            }
+
+            btn.innerText = "发布中...";
+            btn.disabled = true;
+
+            try {
+                const { error } = await _supabase
+                    .from('messages')
+                    .insert([{ name: name, content: content }]);
+
+                if (error) throw error;
+
+                contentInput.value = '';
+                // 发布成功后，强制跳回第1页看最新留言
+                await fetchMessages(1); 
+                
+            } catch (err) {
+                console.error('发布失败:', err);
+                alert("发布失败，请检查网络！");
+            } finally {
+                btn.innerText = "发布留言";
+                btn.disabled = false;
+            }
+        }
+
+        // 初始化：页面加载完成后拉取第 1 页
+        window.addEventListener('DOMContentLoaded', () => fetchMessages(1));
+    </script>
+</body>
+</html>

@@ -65,7 +65,7 @@
             background-color: #d32f2f !important;
         }
 
-        /* --- 这里是你之前漏掉的排行榜 UI 样式 --- */
+        /* 排行榜 UI 样式 */
         #btn-leaderboard {
             position: absolute;
             top: 20px;
@@ -110,54 +110,33 @@
             padding-bottom: 10px;
         }
 
-        #submit-area {
-            display: none;
-            margin-bottom: 20px;
-        }
-
+        #submit-area { display: none; margin-bottom: 20px; }
+        #submit-area p { margin: 10px 0; font-weight: bold; color: #3e2723; }
         #player-name {
-            width: 80%;
-            padding: 10px;
-            font-size: 16px;
-            font-family: inherit;
-            margin-bottom: 10px;
-            border: 2px solid #5d4037;
-            border-radius: 5px;
-            text-align: center;
+            width: 80%; padding: 10px; font-size: 16px; font-family: inherit;
+            margin-bottom: 10px; border: 2px solid #5d4037; border-radius: 5px; text-align: center;
         }
 
         #scores-list {
-            list-style: none;
-            padding: 0;
-            margin: 0 0 20px 0;
-            max-height: 200px;
-            overflow-y: auto;
-            text-align: left;
-            color: #3e2723;
-            font-weight: bold;
+            list-style: none; padding: 0; margin: 0 0 20px 0;
+            max-height: 220px; overflow-y: auto; text-align: left;
+            color: #3e2723; font-weight: bold;
         }
 
         #scores-list li {
-            display: flex;
-            justify-content: space-between;
-            padding: 8px 0;
-            border-bottom: 1px solid rgba(93, 64, 55, 0.2);
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 8px 0; border-bottom: 1px solid rgba(93, 64, 55, 0.2);
         }
 
+        .score-details { display: flex; flex-direction: column; text-align: right; }
+        .score-kills { font-size: 16px; color: #d32f2f; }
+        .score-time { font-size: 12px; color: #666; font-weight: normal; }
+
         .btn {
-            padding: 10px 20px;
-            background-color: #5d4037;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            font-family: inherit;
-            font-size: 16px;
-            cursor: pointer;
-            margin: 5px;
+            padding: 10px 20px; background-color: #5d4037; color: white; border: none;
+            border-radius: 5px; font-family: inherit; font-size: 16px; cursor: pointer; margin: 5px;
         }
-        .btn.cancel {
-            background-color: #8d6e63;
-        }
+        .btn.cancel { background-color: #8d6e63; }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
@@ -176,15 +155,15 @@
             <h2 id="modal-title">全服排行榜</h2>
             
             <div id="submit-area">
-                <p>你连杀了 <span id="final-score" style="color:#d32f2f; font-size: 24px;">0</span> 个敌人！</p>
+                <p>你连杀了 <span id="final-score" style="color:#d32f2f; font-size: 24px;">0</span> 个敌人！<br>
+                   平均拔枪: <span id="final-avg-time" style="color:#2e7d32; font-size: 20px;">0</span> ms</p>
                 <input type="text" id="player-name" placeholder="留下你的大名" maxlength="8">
                 <br>
                 <button class="btn" onclick="submitScore()">提交战绩</button>
             </div>
 
             <div id="list-area">
-                <ul id="scores-list">
-                    </ul>
+                <ul id="scores-list"></ul>
             </div>
 
             <button class="btn cancel" onclick="closeLeaderboard()">返回荒野</button>
@@ -192,21 +171,19 @@
     </div>
 
     <script>
-        // --- Supabase 初始化配置 ---
         const SUPABASE_URL = 'https://hnzrjedtrjxgdverackz.supabase.co'; 
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhuenJqZWR0cmp4Z2R2ZXJhY2t6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAzMzQxNjIsImV4cCI6MjA4NTkxMDE2Mn0.ZK5y7uGXJ-nqednVzK7wL1GTxmA4DQSq34IcO88GcgQ'; 
+        const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-        // 创建 Supabase 客户端
-        const { createClient } = supabase;
-        const _supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-        // --- 游戏核心逻辑 ---
+        // 注意这里的 state 增加了一个 'settling' 状态
         let state = 'idle'; 
         let score = 0;
         let reactionTimeLimit = 600; 
         let drawTimeoutId = null;
         let deathTimeoutId = null;
         let startTime = 0;
+        let totalReactionTime = 0; 
+        let avgTime = 0; 
 
         const statusText = document.getElementById('status-text');
         const enemy = document.getElementById('enemy');
@@ -221,6 +198,11 @@
         });
 
         function handleClick() {
+            // 新增：如果是 settling (结算缓冲) 状态，直接 return，无视任何点击！
+            if (state === 'settling') {
+                return;
+            }
+
             if (state === 'idle' || state === 'gameover') {
                 startRound();
             } else if (state === 'waiting') {
@@ -236,6 +218,7 @@
         function startRound() {
             if (state === 'gameover') {
                 score = 0;
+                totalReactionTime = 0; 
                 reactionTimeLimit = 600; 
                 scoreSpan.innerText = score;
             }
@@ -263,6 +246,7 @@
         function winRound(time) {
             state = 'idle';
             score++;
+            totalReactionTime += time; 
             scoreSpan.innerText = score;
             statusText.innerText = `命中！反应: ${time}ms\n点击继续下个敌人`;
             statusText.style.color = "#2e7d32";
@@ -272,24 +256,38 @@
         }
 
         function gameOver(reason) {
-            state = 'gameover';
-            statusText.innerText = `${reason}\n(点击屏幕重新开始)`;
+            // 新增：死亡瞬间进入 settling 结算状态，期间屏幕锁定
+            state = 'settling'; 
+            statusText.innerText = `${reason}`;
             statusText.style.color = "#000";
             enemy.innerText = "☠️";
             enemy.classList.remove('draw-state');
-            // 游戏结束后弹出榜单
+            
             if (score > 0) {
-                setTimeout(() => { openLeaderboard(true); }, 800);
+                avgTime = Math.round(totalReactionTime / score);
+                setTimeout(() => { 
+                    openLeaderboard(true); 
+                    // 弹窗出现后，才允许玩家关闭弹窗后重新开始
+                    state = 'gameover'; 
+                    statusText.innerText = `${reason}\n(关闭榜单后点击重开)`;
+                }, 800);
+            } else {
+                // 没得分的情况，也给个 400ms 的防误触缓冲期
+                setTimeout(() => {
+                    state = 'gameover';
+                    statusText.innerText = `${reason}\n(点击屏幕重新开始)`;
+                }, 400);
             }
         }
 
-        // --- 云端排行榜系统逻辑 ---
+        // --- 云端排行榜系统逻辑 (保持不变) ---
         const modal = document.getElementById('leaderboard-modal');
         const submitArea = document.getElementById('submit-area');
         const listArea = document.getElementById('list-area');
         const scoresList = document.getElementById('scores-list');
         const modalTitle = document.getElementById('modal-title');
         const finalScoreSpan = document.getElementById('final-score');
+        const finalAvgTimeSpan = document.getElementById('final-avg-time');
         const nameInput = document.getElementById('player-name');
 
         function openLeaderboard(isSubmit) {
@@ -299,6 +297,7 @@
                 submitArea.style.display = 'block';
                 listArea.style.display = 'none';
                 finalScoreSpan.innerText = score;
+                finalAvgTimeSpan.innerText = avgTime; 
                 nameInput.value = ""; 
                 nameInput.focus();
             } else {
@@ -324,10 +323,8 @@
             try {
                 const { error } = await _supabase
                     .from('leaderboard')
-                    .insert([{ name: playerName, score: score }]);
-
+                    .insert([{ name: playerName, score: score, avg_time: avgTime }]);
                 if (error) throw error;
-                
                 openLeaderboard(false);
             } catch (err) {
                 console.error("提交分数失败:", err);
@@ -340,16 +337,14 @@
 
         async function renderLeaderboard() {
             scoresList.innerHTML = "<li>牛仔祈祷中...</li>";
-
             try {
                 const { data, error } = await _supabase
                     .from('leaderboard')
-                    .select('name, score')
+                    .select('name, score, avg_time')
                     .order('score', { ascending: false }) 
                     .limit(10); 
 
                 if (error) throw error;
-
                 scoresList.innerHTML = ""; 
 
                 if (data.length === 0) {
@@ -361,7 +356,15 @@
                     const li = document.createElement('li');
                     let medal = ["🥇", "🥈", "🥉"][index] || `${index + 1}.`;
                     const safeName = item.name.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-                    li.innerHTML = `<span>${medal} ${safeName}</span> <span>${item.score} 杀</span>`;
+                    const avgText = item.avg_time ? `平均: ${item.avg_time}ms` : '平均: 未知';
+
+                    li.innerHTML = `
+                        <span>${medal} ${safeName}</span> 
+                        <div class="score-details">
+                            <span class="score-kills">${item.score} 杀</span>
+                            <span class="score-time">${avgText}</span>
+                        </div>
+                    `;
                     scoresList.appendChild(li);
                 });
             } catch (err) {
