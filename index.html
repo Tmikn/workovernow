@@ -3,181 +3,211 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>下班倒计时</title>
+    <title>下班倒计时 - 摸鱼导航</title>
     <style>
         :root {
-            --bg-color: #f7f9fc;
-            --card-bg: rgba(255, 255, 255, 0.9);
+            --bg-gradient: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
+            --bg-freedom: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            --card-bg: rgba(255, 255, 255, 0.85);
             --primary-color: #2575fc;
             --accent-color: #ff4757;
-            --text-color: #2f3542;
+            --text-main: #2f3542;
+            --text-sub: #747d8c;
             --safe-area-bottom: env(safe-area-inset-bottom);
         }
 
         * {
-            -webkit-tap-highlight-color: transparent; /* 移除移动端点击高亮 */
+            -webkit-tap-highlight-color: transparent;
             box-sizing: border-box;
         }
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
-            background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
-            color: var(--text-color);
+            background: var(--bg-gradient);
+            color: var(--text-main);
             display: flex;
             justify-content: center;
             align-items: center;
-            height: 100vh;
+            min-height: 100vh;
             margin: 0;
-            overflow: hidden;
-            transition: all 0.5s ease;
+            padding: 20px;
+            transition: background 0.8s ease;
         }
 
         /* 下班后的喜庆样式 */
         body.freedom {
-            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            background: var(--bg-freedom);
         }
 
-        .container {
+        /* 核心容器 */
+        .app-container {
+            width: 100%;
+            max-width: 420px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        /* 通用卡片样式 (毛玻璃) */
+        .glass-card {
             background-color: var(--card-bg);
-            padding: 2.5rem 1.5rem;
-            border-radius: 30px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+            border-radius: 24px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255,255,255,0.4);
+            padding: 24px;
             text-align: center;
-            width: 85%;
-            max-width: 400px;
-            backdrop-filter: blur(10px); /* 毛玻璃效果 */
-            border: 1px solid rgba(255,255,255,0.3);
-            
         }
 
-        h1 {
-            font-size: 1.1rem;
+        /* --- 倒计时模块 --- */
+        .timer-header h1 {
+            font-size: 1rem;
             font-weight: 500;
-            color: #747d8c;
-            margin: 0 0 0.5rem 0;
-            letter-spacing: 1px;
+            color: var(--text-sub);
+            margin: 0 0 5px 0;
+            letter-spacing: 2px;
         }
 
         .timer-display {
-            font-size: 3.8rem;
+            font-size: 3.5rem;
             font-weight: 800;
             font-variant-numeric: tabular-nums;
             color: var(--primary-color);
-            margin: 15px 0;
-            text-shadow: 0 4px 10px rgba(37, 117, 252, 0.2);
+            margin: 10px 0;
+            text-shadow: 0 4px 15px rgba(37, 117, 252, 0.15);
         }
 
         .status-message {
-            margin-top: 10px;
             font-size: 1.1rem;
             min-height: 1.6em;
             color: var(--accent-color);
             font-weight: 600;
+            margin-bottom: 15px;
         }
 
-        .input-group {
-            margin-top: 40px;
-            padding-top: 20px;
-            border-top: 1px solid #eee;
+        .time-setting {
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 12px;
+            gap: 8px;
+            padding-top: 15px;
+            border-top: 1px dashed rgba(0,0,0,0.1);
         }
 
-        .input-label {
-            font-size: 0.85rem;
-            color: #a4b0be;
+        .time-setting label {
+            font-size: 0.8rem;
+            color: var(--text-sub);
         }
 
         input[type="time"] {
-            border: 2px solid #f1f2f6;
+            border: none;
+            background: rgba(0,0,0,0.05);
             border-radius: 12px;
-            padding: 12px 20px;
-            font-size: 1.2rem;
-            color: var(--text-color);
+            padding: 8px 16px;
+            font-size: 1.1rem;
+            font-family: inherit;
+            color: var(--text-main);
             outline: none;
-            background: #f1f2f6;
-            width: 100%;
-            max-width: 200px;
+            width: 140px;
             text-align: center;
-            -webkit-appearance: none; /* 统一 iOS 样式 */
+            transition: all 0.3s ease;
         }
 
-        /* 移动端振动提示感官优化 */
         input[type="time"]:focus {
-            border-color: var(--primary-color);
-            background: #fff;
+            background: rgba(255,255,255,0.9);
+            box-shadow: 0 0 0 2px var(--primary-color);
         }
 
-        
+        /* --- 游戏导航网格 --- */
+        .nav-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+        }
 
-        /* 底部版权或装饰 */
-        .footer {
-            position: absolute;
-            bottom: calc(20px + var(--safe-area-bottom));
-            color: rgba(255,255,255,0.7);
-            font-size: 0.8rem;
+        .nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px 15px;
+            background-color: var(--card-bg);
+            border-radius: 20px;
+            text-decoration: none;
+            color: var(--text-main);
+            font-weight: 600;
+            font-size: 0.95rem;
+            box-shadow: 0 6px 15px rgba(0,0,0,0.08);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.4);
+            transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease;
+        }
+
+        .nav-item:active, .nav-item:hover {
+            transform: translateY(-3px) scale(1.02);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.12);
+        }
+
+        .nav-icon {
+            font-size: 2rem;
+            margin-bottom: 8px;
+        }
+
+        /* --- 底部统计 --- */
+        .footer-stats {
+            text-align: center;
+            font-size: 0.75rem;
+            color: rgba(255,255,255,0.8);
+            margin-top: 10px;
+            padding-bottom: var(--safe-area-bottom);
+        }
+
+        .footer-stats span {
+            font-weight: bold;
+            color: #fff;
         }
     </style>
 </head>
 <body>
 
-    <div class="container">
-        <h1>距离下班还有</h1>
-        <div class="timer-display" id="timer">00:00:00</div>
-        <div class="status-message" id="message"></div>
-
-        <div class="input-group">
-            <span class="input-label">设置目标时间</span>
-            <input type="time" id="endTime" value="18:00">
-
-        <div style="margin-top: 25px;">
-            <a href="game.html" style="
-                display: inline-block;
-                padding: 10px 20px;
-                background: #f1f2f6;
-                color: #747d8c;
-                text-decoration: none;
-                border-radius: 15px;
-                font-size: 0.85rem;
-                border: 1px dashed #ced4da;
-            ">🎮 黄油入口</a>
-        <div style="margin-top: 25px;">
-            <a href="Kobe.html" style="
-                display: inline-block;
-                padding: 10px 20px;
-                background: #f1f2f6;
-                color: #747d8c;
-                text-decoration: none;
-                border-radius: 15px;
-                font-size: 0.85rem;
-                border: 1px dashed #ced4da;
-            ">🎮 复活劳大</a>
-        <div style="margin-top: 25px;">
-            <a href="Tank.html" style="
-                display: inline-block;
-                padding: 10px 20px;
-                background: #f1f2f6;
-                color: #747d8c;
-                text-decoration: none;
-                border-radius: 15px;
-                font-size: 0.85rem;
-                border: 1px dashed #ced4da;
-            ">🔥 坦克大战</a>
+    <div class="app-container">
+        <div class="glass-card">
+            <div class="timer-header">
+                <h1>距离下班还有</h1>
+            </div>
+            <div class="timer-display" id="timer">00:00:00</div>
+            <div class="status-message" id="message"></div>
+            
+            <div class="time-setting">
+                <label for="endTime">设定目标时间</label>
+                <input type="time" id="endTime" value="18:00">
+            </div>
         </div>
-        <div style="margin-top: 25px;">
-            <a href="cowboy.html" style="
-                display: inline-block;
-                padding: 10px 20px;
-                background: #f1f2f6;
-                color: #747d8c;
-                text-decoration: none;
-                border-radius: 15px;
-                font-size: 0.85rem;
-                border: 1px dashed #ced4da;
-            ">🤠 慢拔out</a>
+
+        <div class="nav-grid">
+            <a href="game.html" class="nav-item">
+                <div class="nav-icon">🧀</div>
+                黄油入口
+            </a>
+            <a href="Kobe.html" class="nav-item">
+                <div class="nav-icon">🚁</div>
+                复活劳大
+            </a>
+            <a href="Tank.html" class="nav-item">
+                <div class="nav-icon">🎮</div>
+                坦克大战
+            </a>
+            <a href="cowboy.html" class="nav-item">
+                <div class="nav-icon">🤠</div>
+                慢拔out
+            </a>
         </div>
+
+        <div class="footer-stats">
+            本站总访问量 <span id="busuanzi_site_pv">...</span> 次<br>
+            您是今日第 <span id="busuanzi_today_pv">...</span> 位薪水小偷
         </div>
     </div>
 
@@ -225,7 +255,7 @@
 
         endTimeInput.addEventListener('change', () => {
             localStorage.setItem('offWorkTime_mobile', endTimeInput.value);
-            // 手机端切换时间后给予简单的触觉反馈模拟（如果支持）
+            // 手机端切换时间后给予简单的触觉反馈模拟
             if (window.navigator.vibrate) {
                 window.navigator.vibrate(10);
             }
@@ -235,12 +265,8 @@
         setInterval(updateTimer, 1000);
         updateTimer();
     </script>
+    
 <script src="//cdn.busuanzi.cc/busuanzi/3.6.9/busuanzi.min.js" defer></script>
-
-<div style="font-size: 12px; color: #999; text-align: center; margin-top: 20px;">
-    本站总访问量 <span id="busuanzi_site_pv">加载中...</span> 次 | 
-    您是今日第 <span id="busuanzi_today_pv">加载中...</span> 位薪水小偷
-</div>
 
 </body>
 </html>
