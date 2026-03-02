@@ -8,15 +8,17 @@
         body {
             margin: 0;
             padding: 0;
-            background-color: #d2b48c; /* 沙漠黄 */
+            background-color: #d2b48c; 
             font-family: 'Courier New', Courier, monospace;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
             height: 100vh;
-            user-select: none; /* 防止双击选中文字 */
+            user-select: none; 
             overflow: hidden;
+            /* 新增下面这一行，禁用浏览器默认的触摸手势（如滑动、双击放大） */
+            touch-action: none; 
         }
 
         #game-container {
@@ -80,9 +82,8 @@
         const enemy = document.getElementById('enemy');
         const scoreSpan = document.getElementById('score');
 
-        // 核心点击事件 (监听整个屏幕)
-        document.body.addEventListener('mousedown', handleClick);
-        document.body.addEventListener('touchstart', handleClick); // 兼容移动端
+        // 使用统一的 pointerdown 事件
+        document.body.addEventListener('pointerdown', handleClick);
 
         function handleClick(e) {
             // 防止移动端长按触发菜单
