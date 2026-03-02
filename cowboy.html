@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>西部快枪手</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #d2b48c; /* 沙漠黄 */
+            font-family: 'Courier New', Courier, monospace;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            user-select: none; /* 防止双击选中文字 */
+            overflow: hidden;
+        }
+
+        #game-container {
+            text-align: center;
+        }
+
+        #status-text {
+            font-size: 36px;
+            font-weight: bold;
+            color: #3e2723;
+            height: 50px;
+            margin-bottom: 20px;
+        }
+
+        #enemy {
+            width: 150px;
+            height: 150px;
+            background-color: #5d4037; /* 默认牛仔颜色 */
+            border-radius: 10px;
+            margin: 0 auto;
+            transition: background-color 0.1s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 24px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        }
+
+        #score-board {
+            margin-top: 30px;
+            font-size: 24px;
+            color: #3e2723;
+        }
+
+        /* 敌人拔枪时的红色警告状态 */
+        .draw-state {
+            background-color: #d32f2f !important;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <div id="status-text">点击任意位置开始</div>
+        <div id="enemy">🤠</div>
+        <div id="score-board">得分: <span id="score">0</span></div>
+    </div>
+
+    <script>
+        // 游戏状态和变量
+        let state = 'idle'; // 状态: idle(空闲), waiting(等待), react(反应), gameover(结束)
+        let score = 0;
+        let reactionTimeLimit = 600; // 初始敌人拔枪速度 (毫秒)
+        let drawTimeoutId = null;
+        let deathTimeoutId = null;
+        let startTime = 0;
+
+        // DOM 元素
+        const statusText = document.getElementById('status-text');
+        const enemy = document.getElementById('enemy');
+        const scoreSpan = document.getElementById('score');
+
+        // 核心点击事件 (监听整个屏幕)
+        document.body.addEventListener('mousedown', handleClick);
+        document.body.addEventListener('touchstart', handleClick); // 兼容移动端
+
+        function handleClick(e) {
+            // 防止移动端长按触发菜单
+            e.preventDefault(); 
+
+            if (state === 'idle' || state === 'gameover') {
+                startRound();
+            } else if (state === 'waiting') {
+                // 抢跑判定
+                clearTimeout(drawTimeoutId);
+                gameOver("你开枪太早了！走火！");
+            } else if (state === 'react') {
+                // 玩家成功反应
+                let reactionTime = Date.now() - startTime;
+                clearTimeout(deathTimeoutId);
+                winRound(reactionTime);
+            }
+        }
+
+        function startRound() {
+            if (state === 'gameover') {
+                score = 0;
+                reactionTimeLimit = 600; // 重置难度
+                scoreSpan.innerText = score;
+            }
+
+            state = 'waiting';
+            statusText.innerText = "准备...";
+            statusText.style.color = "#3e2723";
+            enemy.classList.remove('draw-state');
+            enemy.innerText = "🤠";
+
+            // 随机等待 2 到 5 秒
+            let randomDelay = Math.floor(Math.random() * 3000) + 2000;
+            
+            drawTimeoutId = setTimeout(() => {
+                triggerDraw();
+            }, randomDelay);
+        }
+
+        function triggerDraw() {
+            state = 'react';
+            statusText.innerText = "开枪！！ (FIRE!)";
+            statusText.style.color = "#d32f2f";
+            enemy.classList.add('draw-state');
+            enemy.innerText = "🔫";
+            
+            startTime = Date.now();
+
+            // 如果玩家没在限时内点击，敌人就会开枪
+            deathTimeoutId = setTimeout(() => {
+                if (state === 'react') {
+                    gameOver("你太慢了，被击中了！");
+                }
+            }, reactionTimeLimit);
+        }
+
+        function winRound(time) {
+            state = 'idle';
+            score++;
+            scoreSpan.innerText = score;
+            statusText.innerText = `命中！反应时间: ${time}ms\n点击继续`;
+            statusText.style.color = "#2e7d32";
+            enemy.innerText = "💀";
+            enemy.classList.remove('draw-state');
+
+            // 增加难度：敌人拔枪越来越快，极限为 250 毫秒
+            reactionTimeLimit = Math.max(250, reactionTimeLimit - 20); 
+        }
+
+        function gameOver(reason) {
+            state = 'gameover';
+            statusText.innerText = `${reason}\n点击重新开始`;
+            statusText.style.color = "#000";
+            enemy.innerText = "☠️";
+            enemy.classList.remove('draw-state');
+        }
+    </script>
+</body>
+</html>
