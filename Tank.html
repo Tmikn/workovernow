@@ -702,7 +702,7 @@
                     // 2. 底盘自动平滑转向到运动方向 (0.08 的转向速度，手感顺滑且保留坦克重量感)
                     const targetAngle = Math.atan2(normX, normZ);
                     const targetQ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), targetAngle);
-                    player.userData.chassis.quaternion.rotateTowards(targetQ, 0.08);
+                    player.userData.chassis.quaternion.rotateTowards(targetQ, 0.045);
 
                     isMoving = true; // 只要按下按键就算在移动，用于触发拖尾特效
                 }
