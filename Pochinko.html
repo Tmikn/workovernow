@@ -499,7 +499,7 @@
         // 手机触摸和空格键逻辑
         let isPressing = false;
         function handleStart(e) { e.preventDefault(); if(!isPressing) { isPressing = true; dropBall(); if(feverTimer > 0) window.feverInterval = setInterval(dropBall, 10); } }
-        function handleEnd() { isPressing = false; if(window.feverInterval) clearInterval(window.feverInterval); }
+        function handleEnd() { isPressing = false; if(window.feverInterval) clearInterval(window.feverInterval); }  
 
         dropBtn.addEventListener('touchstart', handleStart);
         dropBtn.addEventListener('touchend', handleEnd);
