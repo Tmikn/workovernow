@@ -2,17 +2,16 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title></title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>🎰 心跳弹球</title>
     <style>
         body {
-            /* 增加了内边距防贴边 */
             margin: 0; padding: 15px; box-sizing: border-box;
             background-color: #1a1a2e; color: #fff;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             display: flex; flex-direction: column;
             align-items: center; justify-content: center;
-            /* 【核心修复1】使用 dvh(动态视口高度) 代替 vh，防止被手机浏览器底部导航栏遮挡 */
+            /* 手机适配DVH */
             height: 100vh; height: 100dvh; overflow: hidden;
             transition: background-color 0.1s;
         }
@@ -21,19 +20,15 @@
 
         #game-container {
             position: relative;
-            /* 【核心修复2】让容器强制保持 2:3 的比例，并根据屏幕高度自动缩放 */
-            width: 100%; 
-            max-width: 400px;
-            aspect-ratio: 2 / 3; 
-            max-height: calc(100dvh - 120px - env(safe-area-inset-bottom));
-            
+            /* 手机等比缩放适配 */
+            width: 100%; max-width: 400px; aspect-ratio: 2 / 3; 
+            max-height: calc(100dvh - 130px - env(safe-area-inset-bottom));
             box-shadow: 0 0 30px rgba(0, 255, 255, 0.2);
             border-radius: 10px; overflow: hidden; background: #16213e;
             border: 4px solid #0f3460; transition: box-shadow 0.2s, border-color 0.2s;
         }
         #game-container.fever-active { box-shadow: 0 0 50px #ff007f, 0 0 100px #ff007f; border-color: #ff007f; }
 
-        /* 【核心修复3】让物理画布完全铺满缩放后的容器 */
         canvas { display: block; width: 100%; height: 100%; }
         
         #ui {
@@ -42,74 +37,67 @@
             padding: 0 20px; box-sizing: border-box;
             pointer-events: none; z-index: 10;
         }
-        .score-board { font-size: 20px; font-weight: bold; text-shadow: 2px 2px 4px #000, 0 0 10px rgba(255,255,255,0.5); }
+        .score-board { font-size: 18px; font-weight: bold; text-shadow: 2px 2px 4px #000; }
         
         #fever-alert {
             position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%);
             font-size: 50px; font-weight: bold; color: #ff007f;
-            text-shadow: 0 0 20px #fff, 0 0 40px #ff007f; pointer-events: none;
+            text-shadow: 0 0 20px #fff; pointer-events: none;
             z-index: 20; display: none; white-space: nowrap;
         }
 
         .controls {
             margin-top: 15px; display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; 
-            width: 100%; max-width: 400px;
-            /* 【核心修复4】适配 iPhone 底部的白条安全区，防止按钮点不到 */
-            padding-bottom: env(safe-area-inset-bottom);
+            width: 100%; max-width: 400px; padding-bottom: env(safe-area-inset-bottom);
         }
         button {
-            flex: 1; min-width: 75px; /* 屏幕太窄时自动平分布局 */
-            background-color: #e94560; color: white; border: none; padding: 10px 5px;
+            flex: 1; min-width: 80px; background-color: #e94560; color: white; border: none; padding: 12px 5px;
             font-size: 14px; font-weight: bold; border-radius: 8px; cursor: pointer;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.3); transition: transform 0.1s, background-color 0.2s; user-select: none;
+            box-shadow: 0 4px 0 #9d2e40; transition: all 0.1s; user-select: none; -webkit-tap-highlight-color: transparent;
         }
-        button:active:not(:disabled) { transform: translateY(2px); box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
+        button:active:not(:disabled) { transform: translateY(2px); box-shadow: 0 2px 0 #9d2e40; }
         button:hover:not(:disabled) { background-color: #ff5e7a; }
         
         #drop-btn.fever-btn { background-color: #ff007f; box-shadow: 0 0 15px #ff007f; animation: pulse 0.5s infinite alternate; }
         @keyframes pulse { from { transform: scale(1); } to { transform: scale(1.05); } }
 
-        #buy-btn { background-color: #fca311; }
-        #buy-btn:hover:not(:disabled) { background-color: #ffd166; }
+        #buy-btn { background-color: #fca311; box-shadow: 0 4px 0 #a66a0b;}
         #buy-btn.can-buy { animation: pulse 0.5s infinite alternate; box-shadow: 0 0 15px rgba(252, 163, 17, 0.8); }
 
-        #signin-btn { background-color: #9b59b6; }
-        #signin-btn:hover:not(:disabled) { background-color: #af71c6; }
-        #ad-btn { background-color: #4caf50; display: none; } 
-        #ad-btn:hover:not(:disabled) { background-color: #66bb6a; }
-        button:disabled { background-color: #444 !important; color: #888; cursor: not-allowed; box-shadow: none; }
+        #signin-btn { background-color: #9b59b6; box-shadow: 0 4px 0 #6c3d81;}
+        #ad-btn { background-color: #4caf50; display: none; box-shadow: 0 4px 0 #2d6630;} 
+        button:disabled { background-color: #444 !important; color: #888; cursor: not-allowed; box-shadow: 0 4px 0 #222; }
 
         #ad-overlay {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.9);
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.95);
             z-index: 999; display: none; flex-direction: column; align-items: center; justify-content: center;
         }
-        .ad-content { background: #222; padding: 20px; border-radius: 10px; text-align: center; border: 2px solid #fca311; width: 80%; max-width: 300px; }
-        .fake-ad-banner { width: 100%; height: 150px; background: linear-gradient(45deg, #ff00cc, #333399); margin: 15px 0; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 20px; color: yellow; border-radius: 5px; }
+        .ad-content { background: #222; padding: 20px; border-radius: 10px; text-align: center; border: 2px solid #fca311; }
     </style>
 </head>
 <body>
 
     <div id="game-container">
         <div id="ui">
-            <div class="score-board" style="color:#ffd700;">得分: <span id="score">0</span></div>
-            <div class="score-board" style="color:#00ffff;">剩余: <span id="balls-left">20</span></div>
+            <div class="score-board" style="color:#ffd700;">💰 <span id="score">0</span></div>
+            <div class="score-board" style="color:#00ffff;">🔮 <span id="balls-left">20</span></div>
         </div>
         <div id="fever-alert">FEVER TIME!</div>
         <canvas id="pachinkoCanvas" width="400" height="600"></canvas>
     </div>
 
     <div class="controls">
-        <button id="signin-btn">每日签到</button>
-        <button id="drop-btn">投球(空格)</button>
+        <button id="signin-btn">签到</button>
+        <button id="drop-btn">发射(空格)</button>
         <button id="buy-btn" disabled>买球(-60)</button>
-        <button id="ad-btn">看广告(+5)</button>
+        <button id="ad-btn">广告(+5)</button>
     </div>
 
     <div id="ad-overlay">
         <div class="ad-content">
-            <h2 style="margin-top:0;">广告</h2>
-            <div class="fake-ad-banner">一刀999！装备秒回收</div>
-            <p>请观看完毕: <span id="ad-timer" style="color:#fca311; font-size: 24px;">3</span> 秒</p>
+            <h2 style="margin-top:0; color:#fca311;">广告</h2>
+            <div style="width:200px; height:100px; background:linear-gradient(45deg, #f0f, #00f); margin:15px auto; border-radius:5px; display:flex; align-items:center; justify-content:center; font-weight:bold; color:yellow;">一刀999！装备秒回收</div>
+            <p>剩余时间: <span id="ad-timer" style="font-size: 24px;">3</span> 秒</p>
         </div>
     </div>
 
@@ -125,106 +113,111 @@
         const adBtn = document.getElementById('ad-btn');
         const adOverlay = document.getElementById('ad-overlay');
         const feverAlert = document.getElementById('fever-alert');
-        const adTimerEl = document.getElementById('ad-timer'); 
+        const adTimerEl = document.getElementById('ad-timer'); // 之前漏了这行
 
         const CONFIG = {
             width: 400, height: 600,
-            gravity: 0.15, friction: 0.99, bounce: 0.6,
-            pegRadius: 4, ballRadius: 7,
+            gravity: 0.16, friction: 0.992, bounce: 0.55,
+            pegRadius: 3.5, ballRadius: 6.5,
             defaultBalls: 20, ballPrice: 60, adReward: 5, signinReward: 20,
-            maxBallsOnScreen: 80,
-            dropCooldown: 150 
+            maxBallsOnScreen: 80, dropCooldown: 180 
         };
 
         let score = 0, ballsLeft = 0;
         let balls = [], pegs = [], slots = [], particles = [], floatingTexts = [];
         let bumpers = []; 
-        let platform = { x: 150, y: 480, w: 90, h: 10, vx: 3 }; 
+        let platform = { x: 155, y: 490, w: 90, h: 8, vx: 2.8 }; // 挡板微调
+
+        // 【新增】发射器配置
+        let gameTicks = 0;
+        let launcher = {
+            pivotX: 200, pivotY: 25, // 顶部中心
+            length: 45, angle: 0,
+            swingRange: Math.PI / 4, // 左右摇摆各45度
+            swingSpeed: 0.04, // 摇摆速度
+            color: '#e94560'
+        };
         
         let isWatchingAd = false;
         let shakeTime = 0;
         let feverTimer = 0; 
         let lastDropTime = 0; 
 
+        // 存档版本
+        const STORAGE_VER = '_vB1';
+
         function loadState() {
-            let savedScore = localStorage.getItem('pachinko_score_v5');
-            let savedBalls = localStorage.getItem('pachinko_balls_v5');
+            let savedScore = localStorage.getItem('pachinko_score' + STORAGE_VER);
+            let savedBalls = localStorage.getItem('pachinko_balls' + STORAGE_VER);
             score = savedScore !== null ? parseInt(savedScore) : 0;
             ballsLeft = savedBalls !== null ? parseInt(savedBalls) : CONFIG.defaultBalls;
         }
 
         function saveState() {
-            localStorage.setItem('pachinko_score_v5', score);
-            localStorage.setItem('pachinko_balls_v5', ballsLeft);
+            localStorage.setItem('pachinko_score' + STORAGE_VER, score);
+            localStorage.setItem('pachinko_balls' + STORAGE_VER, ballsLeft);
         }
 
         function checkSignIn() {
-            let lastSignIn = localStorage.getItem('pachinko_last_signin');
+            let lastSignIn = localStorage.getItem('pachinko_sign' + STORAGE_VER);
             let today = new Date().toDateString(); 
-            if (lastSignIn === today) {
-                signinBtn.disabled = true; signinBtn.innerText = "今日已签";
-            } else {
-                signinBtn.disabled = false; signinBtn.innerText = `签到(+${CONFIG.signinReward})`;
-            }
+            signinBtn.disabled = (lastSignIn === today);
+            if (signinBtn.disabled) signinBtn.innerText = "已签到";
+            else signinBtn.innerText = `签到(+${CONFIG.signinReward})`;
         }
 
         function doSignIn() {
             let today = new Date().toDateString();
-            localStorage.setItem('pachinko_last_signin', today);
+            localStorage.setItem('pachinko_sign' + STORAGE_VER, today);
             ballsLeft += CONFIG.signinReward;
             saveState(); checkSignIn(); updateUI();
-            spawnFloatingText(`签到成功 +${CONFIG.signinReward}球!`, CONFIG.width/2, CONFIG.height/2, '#00ffff', true);
-            spawnParticles(CONFIG.width/2, CONFIG.height/2, '#00ffff', 40);
-            shakeTime = 10;
+            spawnFloatingText(`签到成功 +${CONFIG.signinReward}🔮`, 200, 300, '#00ffff', true);
+            spawnParticles(200, 300, '#00ffff', 30);
         }
 
         function updateUI() {
             scoreEl.innerText = score; ballsLeftEl.innerText = ballsLeft;
             buyBtn.disabled = score < CONFIG.ballPrice;
-            
-            if (score >= CONFIG.ballPrice) {
-                buyBtn.classList.add('can-buy');
-            } else {
-                buyBtn.classList.remove('can-buy');
-            }
+            buyBtn.classList.toggle('can-buy', score >= CONFIG.ballPrice);
 
             if (feverTimer > 0) {
-                dropBtn.disabled = false; dropBtn.innerText = "免费点射!"; dropBtn.classList.add('fever-btn');
+                dropBtn.disabled = false; dropBtn.innerText = "狂热射击!"; dropBtn.classList.add('fever-btn');
                 adBtn.style.display = 'none'; dropBtn.style.display = 'inline-block';
             } else {
-                dropBtn.innerText = "投球(空格)"; dropBtn.classList.remove('fever-btn');
+                dropBtn.innerText = "发射(空格)"; dropBtn.classList.remove('fever-btn');
                 dropBtn.disabled = ballsLeft <= 0;
-                
-                if (ballsLeft <= 0 && balls.length === 0) {
-                    adBtn.style.display = 'inline-block'; dropBtn.style.display = 'none';
-                } else {
-                    adBtn.style.display = 'none'; dropBtn.style.display = 'inline-block';
-                }
+                // 广告按钮显示逻辑：彻底破产且场上无球
+                let isBroke = score < CONFIG.ballPrice && ballsLeft <= 0 && balls.length === 0;
+                adBtn.style.display = isBroke ? 'inline-block' : 'none';
+                dropBtn.style.display = isBroke ? 'none' : 'inline-block';
             }
         }
 
         function initObstacles() {
             pegs = []; bumpers = [];
-            const rows = 11, cols = 9, spacingX = 40, spacingY = 35, startX = 40, startY = 80;
+            const rows = 12, cols = 9, spacingX = 40, spacingY = 32, startX = 40, startY = 85;
             for (let row = 0; row < rows; row++) {
                 let offset = (row % 2 === 0) ? 0 : spacingX / 2;
-                let currentCols = (row % 2 === 0) ? cols : cols - 1;
-                for (let col = 0; col < currentCols; col++) {
+                for (let col = 0; col < (row % 2 === 0 ? cols : cols - 1); col++) {
                     let px = startX + col * spacingX + offset; let py = startY + row * spacingY;
-                    if (row >= 4 && row <= 6 && col >= 3 && col <= 5) continue; 
+                    // 让出炮台、红球和挡板路径
+                    if (py < 120 && px > 160 && px < 240) continue; 
+                    if (py > 220 && py < 300 && px > 150 && px < 250) continue; 
                     pegs.push({ x: px, y: py });
                 }
             }
-            bumpers.push({ x: 164, y: 260, radius: 28, bounce: 1.5, color: '#ff2e63', pulse: 0 });
-            bumpers.push({ x: 236, y: 260, radius: 28, bounce: 1.5, color: '#ff2e63', pulse: 0 });
+            // 【数值核心】赌狗流 Scheme B：中间红球门神，通道仅20px宽。
+            bumpers.push({ x: 165, y: 260, radius: 25, bounce: 1.5, color: '#ff2e63', pulse: 0 });
+            bumpers.push({ x: 235, y: 260, radius: 25, bounce: 1.5, color: '#ff2e63', pulse: 0 });
         }
 
         function initSlots() {
             slots = [];
             const types = ['normal', 'normal', 'normal', 'fever', 'normal', 'normal', 'normal'];
-            const pointsArr = [10, 30, 50, 'FE', 50, 30, 10]; 
-            const colors = ['#4e89ae', '#43658b', '#ed6663', '#ff007f', '#ed6663', '#43658b', '#4e89ae'];
-            const widths = [80, 65, 45, 20, 45, 65, 80]; 
+            // 【分数值修改】方案 B：外侧高分
+            const pointsArr = [10, 60, 20, 'FE', 20, 60, 10]; 
+            const colors = ['#4e89ae', '#ed6663', '#43658b', '#ff007f', '#43658b', '#ed6663', '#4e89ae'];
+            const widths = [80, 45, 65, 20, 65, 45, 80]; 
 
             let currentX = 0;
             for (let i = 0; i < 7; i++) {
@@ -239,7 +232,7 @@
 
         function spawnParticles(x, y, color, count) {
             for(let i=0; i<count; i++) {
-                particles.push({ x: x, y: y, vx: (Math.random() - 0.5) * 8, vy: (Math.random() - 1) * 8, life: 1.0, color: color, size: Math.random() * 3 + 1 });
+                particles.push({ x: x, y: y, vx: (Math.random() - 0.5) * 6, vy: (Math.random() - 1) * 6, life: 1.0, color: color, size: Math.random() * 2 + 1 });
             }
         }
 
@@ -250,7 +243,6 @@
         function dropBall() {
             if (isWatchingAd) return;
             if (balls.length >= CONFIG.maxBallsOnScreen) return; 
-
             let now = Date.now();
             if (now - lastDropTime < CONFIG.dropCooldown) return;
 
@@ -263,17 +255,22 @@
             lastDropTime = now; 
             updateUI(); 
 
+            // 【发射逻辑】从发射器末端射出，速度方向由角度决定
+            const launchSpeed = 6; 
+            const startX = launcher.pivotX - Math.sin(launcher.angle) * launcher.length;
+            const startY = launcher.pivotY + Math.cos(launcher.angle) * launcher.length;
+
             balls.push({
-                x: CONFIG.width / 2 + (Math.random() - 0.5) * 60, 
-                y: 10,
-                vx: (Math.random() - 0.5) * 1.5,
-                vy: 0,
-                color: '#e2d810'
+                x: startX, y: startY,
+                vx: -Math.sin(launcher.angle) * launchSpeed + (Math.random()-0.5)*0.2, // 加点微小随机偏向
+                vy: Math.cos(launcher.angle) * launchSpeed,
+                color: feverTimer > 0 ? '#ff007f' : '#e2d810',
+                r: feverTimer > 0 ? CONFIG.ballRadius * 0.8 : CONFIG.ballRadius // fever模式球变小防止拥堵
             });
         }
 
         function buyBall() {
-            if (score >= CONFIG.ballPrice) { score -= CONFIG.ballPrice; ballsLeft++; saveState(); updateUI(); }
+            if (score >= CONFIG.ballPrice) { score -= CONFIG.ballPrice; ballsLeft++; saveState(); updateUI(); spawnFloatingText(`🔮 +1`, 200, platform.y - 20, '#fca311', false); }
         }
 
         function activateFever() {
@@ -281,8 +278,10 @@
                 document.body.classList.add('fever-active');
                 gameContainer.classList.add('fever-active');
                 feverAlert.style.display = 'block';
+                // Fever开启时加快发射器摇摆速度
+                launcher.swingSpeed = 0.08;
             }
-            feverTimer = 300; 
+            feverTimer = 330; 
             shakeTime = 30;
             updateUI();
         }
@@ -291,12 +290,13 @@
             if (isWatchingAd) return;
             isWatchingAd = true; adOverlay.style.display = 'flex'; 
             let timeLeft = 3; adTimerEl.innerText = timeLeft;
+            adOverlay.onclick = () => { spawnFloatingText("别急，看完", 200, 300, "#ff0", false); };
             let timerInterval = setInterval(() => {
                 timeLeft--; adTimerEl.innerText = timeLeft;
                 if (timeLeft <= 0) {
                     clearInterval(timerInterval); ballsLeft += CONFIG.adReward;
-                    isWatchingAd = false; adOverlay.style.display = 'none'; 
-                    saveState(); updateUI();
+                    isWatchingAd = false; adOverlay.style.display = 'none'; adOverlay.onclick = null;
+                    saveState(); updateUI(); spawnFloatingText(`🔮 +${CONFIG.adReward}`, 200, 300, '#4caf50', true);
                 }
             }, 1000); 
         }
@@ -305,57 +305,50 @@
             let testX = ball.x; let testY = ball.y;
             if (ball.x < rect.x) testX = rect.x; else if (ball.x > rect.x + rect.w) testX = rect.x + rect.w;
             if (ball.y < rect.y) testY = rect.y; else if (ball.y > rect.y + rect.h) testY = rect.y + rect.h;
-
-            let distX = ball.x - testX; let distY = ball.y - testY;
-            let distance = Math.sqrt((distX*distX) + (distY*distY));
-
-            if (distance <= CONFIG.ballRadius) {
-                let nx = distX / distance || 0; let ny = distY / distance || -1;
-                ball.x = testX + nx * CONFIG.ballRadius; ball.y = testY + ny * CONFIG.ballRadius;
-                
+            let dx = ball.x - testX, dy = ball.y - testY;
+            let distance = Math.sqrt(dx*dx + dy*dy);
+            if (distance <= ball.r) {
+                let nx = dx / distance || 0, ny = dy / distance || -1;
+                ball.x = testX + nx * ball.r; ball.y = testY + ny * ball.r;
                 let dotProduct = ball.vx * nx + ball.vy * ny;
-                ball.vx = (ball.vx - 2 * dotProduct * nx) * CONFIG.bounce;
-                ball.vy = (ball.vy - 2 * dotProduct * ny) * (CONFIG.bounce + 0.2);
-                
+                // 挡板增加水平排斥力和最低反弹力，绝对不卡
+                let frictionX = (ball.vx - platform.vx * 0.8) * 0.05;
+                ball.vx = (ball.vx - 2 * dotProduct * nx) * CONFIG.bounce - frictionX;
+                ball.vy = (ball.vy - 2 * dotProduct * ny) * (CONFIG.bounce + 0.15);
+                if(ball.vy > -1) ball.vy = -2 - Math.random(); // 强制弹开
                 let rectCenter = rect.x + rect.w / 2;
                 ball.vx += (ball.x < rectCenter ? -1 : 1);
-                
-                if(ny !== 0) ball.vx += rect.vx * 0.4;
             }
         }
 
         function update() {
+            gameTicks++;
+            // 【发射器摇摆逻辑】使用Sine函数实现平滑摇摆
+            launcher.angle = Math.sin(gameTicks * launcher.swingSpeed) * launcher.swingRange;
+
             platform.x += platform.vx;
-            if(platform.x < 50 || platform.x + platform.w > CONFIG.width - 50) platform.vx *= -1;
+            if(platform.x < 30 || platform.x + platform.w > CONFIG.width - 30) platform.vx *= -1;
 
             if (feverTimer > 0) {
                 feverTimer--;
-                if (feverTimer % 10 === 0) shakeTime = 5; 
                 if (feverTimer <= 0) {
-                    document.body.classList.remove('fever-active');
-                    gameContainer.classList.remove('fever-active');
-                    feverAlert.style.display = 'none';
+                    document.body.classList.remove('fever-active'); gameContainer.classList.remove('fever-active'); feverAlert.style.display = 'none';
+                    launcher.swingSpeed = 0.04;
                     updateUI();
                 }
             }
 
+            // 球与球排斥碰撞
             for (let i = 0; i < balls.length; i++) {
                 for (let j = i + 1; j < balls.length; j++) {
-                    let dx = balls[i].x - balls[j].x;
-                    let dy = balls[i].y - balls[j].y;
-                    let distSq = dx * dx + dy * dy;
-                    let minDist = CONFIG.ballRadius * 2;
-                    
-                    if (distSq < minDist * minDist && distSq > 0) {
-                        let dist = Math.sqrt(distSq);
-                        let overlap = (minDist - dist) / 2;
-                        let nx = dx / dist; let ny = dy / dist;
-                        
-                        balls[i].x += nx * overlap; balls[i].y += ny * overlap;
-                        balls[j].x -= nx * overlap; balls[j].y -= ny * overlap;
-                        
-                        balls[i].vx += nx * 0.2; balls[i].vy += ny * 0.2;
-                        balls[j].vx -= nx * 0.2; balls[j].vy -= ny * 0.2;
+                    let bi = balls[i], bj = balls[j];
+                    let dx = bi.x - bj.x, dy = bi.y - bj.y;
+                    let minDist = bi.r + bj.r;
+                    if (dx*dx + dy*dy < minDist*minDist) {
+                        let dist = Math.sqrt(dx*dx+dy*dy) || 1;
+                        let nx = dx/dist, ny = dy/dist, overlap = (minDist-dist)/2;
+                        bi.x += nx*overlap; bi.y += ny*overlap; bj.x -= nx*overlap; bj.y -= ny*overlap;
+                        bi.vx += nx*0.1; bi.vy += ny*0.1; bj.vx -= nx*0.1; bj.vy -= ny*0.1;
                     }
                 }
             }
@@ -366,35 +359,35 @@
                 ball.vx *= CONFIG.friction; ball.vy *= CONFIG.friction;
                 ball.x += ball.vx; ball.y += ball.vy;
 
-                if (ball.x - CONFIG.ballRadius < 0) { ball.x = CONFIG.ballRadius; ball.vx *= -CONFIG.bounce; } 
-                else if (ball.x + CONFIG.ballRadius > CONFIG.width) { ball.x = CONFIG.width - CONFIG.ballRadius; ball.vx *= -CONFIG.bounce; }
+                if (ball.x - ball.r < 0) { ball.x = ball.r; ball.vx *= -CONFIG.bounce; } 
+                else if (ball.x + ball.r > CONFIG.width) { ball.x = CONFIG.width - ball.r; ball.vx *= -CONFIG.bounce; }
 
                 for (let peg of pegs) {
                     let dx = ball.x - peg.x, dy = ball.y - peg.y;
                     let distance = Math.sqrt(dx * dx + dy * dy);
-                    let minDist = CONFIG.ballRadius + CONFIG.pegRadius;
+                    let minDist = ball.r + CONFIG.pegRadius;
                     if (distance < minDist) {
                         let nx = dx / distance, ny = dy / distance, overlap = minDist - distance;
                         ball.x += nx * overlap; ball.y += ny * overlap;
                         let dotProduct = ball.vx * nx + ball.vy * ny;
                         ball.vx = (ball.vx - 2 * dotProduct * nx) * CONFIG.bounce;
                         ball.vy = (ball.vy - 2 * dotProduct * ny) * CONFIG.bounce;
-                        ball.vx += (Math.random() - 0.5) * 0.5;
+                        ball.vx += (Math.random() - 0.5) * 0.4;
                     }
                 }
 
                 for (let bmp of bumpers) {
                     let dx = ball.x - bmp.x, dy = ball.y - bmp.y;
-                    let distance = Math.sqrt(dx * dx + dy * dy);
-                    let minDist = CONFIG.ballRadius + bmp.radius;
-                    if (distance < minDist) {
-                        let nx = dx / distance, ny = dy / distance, overlap = minDist - distance;
-                        ball.x += nx * overlap; ball.y += ny * overlap;
+                    let distSq = dx*dx + dy*dy;
+                    let minDist = ball.r + bmp.radius;
+                    if (distSq < minDist*minDist) {
+                        let distance = Math.sqrt(distSq);
+                        let nx = dx / distance, ny = dy / distance;
+                        ball.x = bmp.x + nx * minDist; ball.y = bmp.y + ny * minDist;
                         let dotProduct = ball.vx * nx + ball.vy * ny;
                         ball.vx = (ball.vx - 2 * dotProduct * nx) * bmp.bounce;
                         ball.vy = (ball.vy - 2 * dotProduct * ny) * bmp.bounce;
-                        bmp.pulse = 10; 
-                        spawnParticles(ball.x, ball.y, bmp.color, 5);
+                        bmp.pulse = 10; spawnParticles(ball.x, ball.y, bmp.color, 4);
                     }
                 }
 
@@ -403,15 +396,16 @@
                 if (ball.y > CONFIG.height - 40) {
                     for (let slot of slots) {
                         if (ball.x > slot.x && ball.x < slot.x + slot.width) {
-                            slot.flashTimer = 20;
+                            slot.flashTimer = 15;
                             if (slot.type === 'fever') {
-                                spawnFloatingText(`狂热!`, ball.x, slot.y - 10, '#ff007f', true);
-                                spawnParticles(ball.x, slot.y, '#ff007f', 50);
+                                spawnFloatingText(`狂热!`, ball.x, slot.y - 15, '#ff007f', true);
+                                spawnParticles(ball.x, slot.y, '#ff007f', 40);
                                 activateFever();
                             } else {
                                 score += slot.points;
-                                spawnFloatingText(`+${slot.points}`, ball.x, slot.y - 10, '#00ffff', false);
-                                spawnParticles(ball.x, slot.y, slot.color, 15);
+                                spawnFloatingText(`+${slot.points}💰`, ball.x, slot.y - 15, slot.points >= 60 ? '#ffd700' : '#00ffff', slot.points >= 60);
+                                spawnParticles(ball.x, slot.y, slot.color, slot.points >= 60 ? 15 : 8);
+                                shakeTime = slot.points >= 60 ? 10 : 0;
                             }
                             saveState(); break; 
                         }
@@ -422,92 +416,104 @@
             }
 
             if (shakeTime > 0) shakeTime--;
-            for (let slot of slots) { if(slot.flashTimer > 0) slot.flashTimer--; }
-            for (let bmp of bumpers) { if(bmp.pulse > 0) bmp.pulse--; }
-
-            for(let i = particles.length - 1; i >= 0; i--) {
-                let p = particles[i]; p.x += p.vx; p.y += p.vy; p.vy += 0.2; p.life -= 0.02;
-                if(p.life <= 0) particles.splice(i, 1);
-            }
-            for(let i = floatingTexts.length - 1; i >= 0; i--) {
-                let ft = floatingTexts[i]; ft.y -= 1.5; ft.life -= 0.015;
-                if(ft.life <= 0) floatingTexts.splice(i, 1);
-            }
+            slots.forEach(s => { if(s.flashTimer > 0) s.flashTimer--; });
+            bumpers.forEach(b => { if(b.pulse > 0) b.pulse--; });
+            particles.forEach((p,i) => { p.x += p.vx; p.y += p.vy; p.vy += 0.15; p.life -= 0.02; if(p.life <= 0) particles.splice(i,1); });
+            floatingTexts.forEach((ft,i) => { ft.y -= 1.2; ft.life -= 0.015; if(ft.life <= 0) floatingTexts.splice(i,1); });
         }
 
         function draw() {
             ctx.clearRect(0, 0, CONFIG.width, CONFIG.height);
             ctx.save();
-            if(shakeTime > 0) { ctx.translate((Math.random() - 0.5) * 8, (Math.random() - 0.5) * 8); }
+            if(shakeTime > 0) { ctx.translate((Math.random() - 0.5) * 6, (Math.random() - 0.5) * 6); }
 
+            // 槽位
             for (let slot of slots) {
                 ctx.fillStyle = slot.flashTimer > 0 ? '#ffffff' : slot.color;
                 ctx.fillRect(slot.x, slot.y, slot.width, slot.height);
                 ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.strokeRect(slot.x, slot.y, slot.width, slot.height);
-                ctx.fillStyle = '#fff'; 
-                ctx.font = slot.type === 'fever' ? 'bold 11px Arial' : 'bold 16px Arial';
+                ctx.fillStyle = '#fff'; ctx.font = slot.type === 'fever' ? 'bold 11px Arial' : 'bold 16px Arial';
                 ctx.textAlign = 'center'; ctx.fillText(slot.points, slot.x + slot.width / 2, slot.y + 25);
             }
 
-            ctx.fillStyle = '#fca311';
-            ctx.fillRect(platform.x, platform.y, platform.w, platform.h);
-            ctx.strokeStyle = '#fff'; ctx.strokeRect(platform.x, platform.y, platform.w, platform.h);
+            // 挡板
+            ctx.fillStyle = '#fca311'; ctx.fillRect(platform.x, platform.y, platform.w, platform.h);
+            ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.strokeRect(platform.x, platform.y, platform.w, platform.h);
 
+            // 钉子
             ctx.fillStyle = '#a8d8ea';
             for (let peg of pegs) { ctx.beginPath(); ctx.arc(peg.x, peg.y, CONFIG.pegRadius, 0, Math.PI*2); ctx.fill(); }
 
+            // Bumpers
             for (let bmp of bumpers) {
-                let currentRadius = bmp.radius + (bmp.pulse > 0 ? 3 : 0); 
+                let r = bmp.radius + (bmp.pulse > 0 ? 3 : 0); 
                 ctx.fillStyle = bmp.pulse > 0 ? '#ffffff' : bmp.color;
-                ctx.beginPath(); ctx.arc(bmp.x, bmp.y, currentRadius, 0, Math.PI*2); ctx.fill();
+                ctx.beginPath(); ctx.arc(bmp.x, bmp.y, r, 0, Math.PI*2); ctx.fill();
                 ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
             }
 
-            for (let p of particles) {
-                ctx.globalAlpha = p.life; ctx.fillStyle = p.color;
-                ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI*2); ctx.fill();
-            }
-            ctx.globalAlpha = 1.0;
+            // 【绘制发射器】
+            ctx.save();
+            ctx.translate(launcher.pivotX, launcher.pivotY);
+            ctx.rotate(launcher.angle);
+            // 炮管
+            ctx.fillStyle = launcher.color;
+            ctx.fillRect(-7, 0, 14, launcher.length);
+            ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
+            ctx.strokeRect(-7, 0, 14, launcher.length);
+            // 炮头
+            ctx.beginPath(); ctx.arc(0, launcher.length, 10, 0, Math.PI);
+            ctx.fillStyle = '#222'; ctx.fill(); ctx.stroke();
+            // 底座
+            ctx.beginPath(); ctx.arc(0, 0, 15, 0, Math.PI*2);
+            ctx.fillStyle = '#0f3460'; ctx.fill(); ctx.stroke();
+            ctx.restore();
 
+            // 球
             for (let ball of balls) {
                 ctx.fillStyle = feverTimer > 0 ? '#ff007f' : ball.color; 
-                ctx.beginPath(); ctx.arc(ball.x, ball.y, CONFIG.ballRadius, 0, Math.PI*2); ctx.fill();
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
-                ctx.beginPath(); ctx.arc(ball.x - 2, ball.y - 2, CONFIG.ballRadius / 3, 0, Math.PI*2); ctx.fill();
+                ctx.beginPath(); ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI*2); ctx.fill();
+                // 光晕
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+                ctx.beginPath(); ctx.arc(ball.x - ball.r*0.3, ball.y - ball.r*0.3, ball.r/3, 0, Math.PI*2); ctx.fill();
             }
 
+            // 粒子和文字
+            for (let p of particles) { ctx.globalAlpha = p.life; ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI*2); ctx.fill(); }
+            ctx.globalAlpha = 1.0;
             for(let ft of floatingTexts) {
                 ctx.globalAlpha = ft.life; ctx.fillStyle = ft.color;
-                ctx.font = ft.isBig ? 'bold 32px Arial' : 'bold 20px Arial';
+                ctx.font = ft.isBig ? 'bold 30px Arial' : 'bold 20px Arial';
                 ctx.textAlign = 'center'; ctx.strokeStyle = '#000'; ctx.lineWidth = 3;
                 ctx.strokeText(ft.text, ft.x, ft.y); ctx.fillText(ft.text, ft.x, ft.y);
             }
-            ctx.globalAlpha = 1.0;
-            ctx.restore();
+            ctx.globalAlpha = 1.0; ctx.restore();
         }
 
         function loop() { update(); draw(); requestAnimationFrame(loop); }
 
-        signinBtn.addEventListener('click', doSignIn);
-        dropBtn.addEventListener('click', dropBall);
-        buyBtn.addEventListener('click', buyBall);
-        adBtn.addEventListener('click', watchAd);
+        signinBtn.onclick = doSignIn;
+        buyBtn.onclick = buyBall;
+        adBtn.onclick = watchAd;
         
-        let spacePressed = false;
+        // 手机触摸和空格键逻辑
+        let isPressing = false;
+        function handleStart(e) { e.preventDefault(); if(!isPressing) { isPressing = true; dropBall(); if(feverTimer > 0) window.feverInterval = setInterval(dropBall, 160); } }
+        function handleEnd() { isPressing = false; if(window.feverInterval) clearInterval(window.feverInterval); }
+
+        dropBtn.addEventListener('touchstart', handleStart);
+        dropBtn.addEventListener('touchend', handleEnd);
+        dropBtn.addEventListener('mousedown', handleStart);
+        dropBtn.addEventListener('mouseup', handleEnd);
+        dropBtn.addEventListener('mouseleave', handleEnd);
+
         document.addEventListener('keydown', (e) => {
-            if (e.code === 'Space' && !spacePressed) {
-                e.preventDefault(); spacePressed = true; dropBall();
-                if(feverTimer > 0) {
-                    window.feverInterval = setInterval(dropBall, 150); 
-                }
-            } else if (e.code === 'KeyB') { buyBall(); }
-        });
-        document.addEventListener('keyup', (e) => {
             if (e.code === 'Space') {
-                spacePressed = false;
-                if(window.feverInterval) { clearInterval(window.feverInterval); window.feverInterval = null; }
-            }
+                e.preventDefault();
+                if(!isPressing) { isPressing = true; dropBall(); if(feverTimer > 0) window.feverInterval = setInterval(dropBall, 160); }
+            } else if (e.code === 'KeyB') buyBall();
         });
+        document.addEventListener('keyup', (e) => { if (e.code === 'Space') handleEnd(); });
 
         loadState(); checkSignIn(); initObstacles(); initSlots(); updateUI(); loop();
     </script>
