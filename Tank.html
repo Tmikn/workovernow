@@ -161,6 +161,10 @@
         EN
     </div>
 
+    <div id="btn-mode" style="position: fixed; top: 70px; right: 20px; height: 30px; padding: 0 10px; background: rgba(0,0,0,0.5); border: 2px solid #00f2ff; color: #00f2ff; border-radius: 5px; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 9999; font-weight: bold; font-size: 12px; transition: 0.3s;">
+        操作: 经典
+    </div>
+
     <div id="start-overlay">
         <h1 id="t-title" style="margin-bottom: 40px;">坦克: 大战</h1>
         <button id="start-btn"><span id="t-start">初始化作战系统</span></button>
@@ -207,11 +211,22 @@
         <div id="upgrade-options" style="display: flex; flex-wrap: wrap; justify-content: center;"></div>
     </div>
 
-    <div id="gameover-overlay"
-        style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(139,0,0,0.85); z-index:4000; display:none; flex-direction:column; align-items:center; justify-content:center; color:white;">
-        <h1 id="t-go-title" style="font-size:3em; margin-bottom:10px;">失去链接...</h1>
-        <p style="font-size:1.5em; margin-bottom:30px;"><span id="t-go-score">最终评分:</span> <span
-                id="final-score">0</span></p>
+    <div id="gameover-overlay" style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(15,0,20,0.9); z-index:4000; display:none; flex-direction:column; align-items:center; justify-content:center; color:white;">
+        <h1 id="t-go-title" style="font-size:3em; margin-bottom:10px; color: #ff4444;">失去链接...</h1>
+        <p style="font-size:1.5em; margin-bottom:20px; color: #00f2ff;"><span id="t-go-score">最终评分:</span> <span id="final-score">0</span></p>
+        
+        <div id="score-submit-zone" style="display: flex; gap: 10px; margin-bottom: 20px;">
+            <input type="text" id="player-name" value="Tmikn" maxlength="12" style="padding: 10px; font-size: 1em; border-radius: 5px; border: 2px solid #00f2ff; background: #111; color: white; text-align: center; width: 150px;">
+            <button id="btn-submit-score" style="background: #00f2ff; color: #000;"><span id="t-submit">上传成绩</span></button>
+        </div>
+
+        <div id="leaderboard-zone" style="background: rgba(0,0,0,0.6); padding: 15px; border-radius: 10px; border: 1px solid #9B409E; margin-bottom: 30px; width: 300px; min-height: 150px;">
+            <h3 id="t-leaderboard-title" style="margin-top: 0; color: #9B409E; text-align: center; border-bottom: 1px solid #9B409E; padding-bottom: 5px;">全球排行榜</h3>
+            <ol id="leaderboard-list" style="color: white; padding-left: 20px; margin: 10px 0 0 0; line-height: 1.8;">
+                <li style="color: #666;" id="t-loading">加载中...</li>
+            </ol>
+        </div>
+
         <button id="btn-restart"><span id="t-restart">重新开始</span></button>
     </div>
 
@@ -227,8 +242,13 @@
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 
     <script>
+        const SUPABASE_URL = 'https://hnzrjedtrjxgdverackz.supabase.co'; 
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhuenJqZWR0cmp4Z2R2ZXJhY2t6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAzMzQxNjIsImV4cCI6MjA4NTkxMDE2Mn0.ZK5y7uGXJ-nqednVzK7wL1GTxmA4DQSq34IcO88GcgQ'; 
+        
+        const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         /** --- 多语言系统 (i18n) --- **/
         let currentLang = 'zh'; // 默认中文
 
@@ -239,6 +259,11 @@
                 upgTitle: "系统组件进化",
                 goTitle: "失去链接...", goScore: "最终评分:", restart: "重新部署",
                 pauseTitle: "系统已挂起", resume: "恢复作战",
+                modeClassic: "操控: 经典", modeModern: "操控: 现代",
+
+                // --- 新增：排行榜相关的翻译 ---
+                namePlaceholder: "代号", submit: "上传成绩", submitted: "已上传!", 
+                lbTitle: "全球排行榜", loading: "正在接入数据库...", empty: "暂无记录",
 
                 // 升级卡片文案
                 fireName: "并联炮管", fireDesc: "增加额外火力点",
@@ -258,6 +283,11 @@
                 upgTitle: "SYSTEM EVOLUTION",
                 goTitle: "CONNECTION LOST...", goScore: "Final Score:", restart: "REDEPLOY",
                 pauseTitle: "SYSTEM SUSPENDED", resume: "RESUME COMBAT",
+                modeClassic: "CTRL: CLASSIC", modeModern: "CTRL: MODERN",
+
+                // --- 新增：排行榜相关的翻译 ---
+                namePlaceholder: "Callsign", submit: "SUBMIT SCORE", submitted: "UPLOADED!", 
+                lbTitle: "GLOBAL LEADERBOARD", loading: "Accessing Database...", empty: "No records yet",
 
                 // Upgrade Cards Text
                 fireName: "Twin Barrels", fireDesc: "Adds an extra firing point",
@@ -273,7 +303,7 @@
             }
         };
 
-        function applyLanguage() {
+       function applyLanguage() {
             const t = dict[currentLang];
             document.getElementById('t-title').innerText = t.title;
             document.getElementById('t-start').innerText = t.start;
@@ -287,10 +317,52 @@
             document.getElementById('t-restart').innerText = t.restart;
             document.getElementById('t-pause-title').innerText = t.pauseTitle;
             document.getElementById('t-resume').innerText = t.resume;
+            
+            // --- 新增：应用排行榜的翻译 ---
+            const submitBtnText = document.getElementById('t-submit');
+            if(submitBtnText) submitBtnText.innerText = t.submit;
+            const lbTitle = document.getElementById('t-leaderboard-title');
+            if(lbTitle) lbTitle.innerText = t.lbTitle;
+            const playerNameInput = document.getElementById('player-name');
+            if(playerNameInput) playerNameInput.placeholder = t.namePlaceholder;
+            
             document.getElementById('btn-lang').innerText = currentLang === 'zh' ? '中' : 'EN';
         }
 
         // 绑定语言切换按钮
+        document.getElementById('btn-lang').onclick = () => {
+            currentLang = currentLang === 'zh' ? 'en' : 'zh';
+            applyLanguage();
+        };
+
+        // --- 插入部分：操作模式状态与翻译更新 ---
+        let isModernMode = false; // 默认经典模式
+
+        function updateModeBtnText() {
+            const btn = document.getElementById('btn-mode');
+            if (btn) {
+                btn.innerText = isModernMode ? dict[currentLang].modeModern : dict[currentLang].modeClassic;
+                // 现代模式变紫，经典模式变青，视觉上做个区分
+                btn.style.borderColor = isModernMode ? '#9B409E' : '#00f2ff';
+                btn.style.color = isModernMode ? '#9B409E' : '#00f2ff';
+            }
+        }
+
+        // 修改原本的 applyLanguage，让它也顺便更新模式按钮的文字
+        const originalApplyLang = applyLanguage;
+        applyLanguage = function() {
+            originalApplyLang(); 
+            updateModeBtnText();
+        };
+
+        // 绑定模式切换按钮
+        document.getElementById('btn-mode').onclick = () => {
+            isModernMode = !isModernMode;
+            updateModeBtnText();
+        };
+        // ------------------------------------
+
+        // 绑定语言切换按钮 (你原本的代码)
         document.getElementById('btn-lang').onclick = () => {
             currentLang = currentLang === 'zh' ? 'en' : 'zh';
             applyLanguage();
@@ -586,26 +658,53 @@
             let isMoving = false;
 
             // ==========================================
-            // 1. PC 端逻辑 (键盘：WS相对进退，AD原地转向)
+            // 1. PC 端逻辑 (双模式：经典坦克 VS 现代绝对方向)
             // ==========================================
-            let pcRotDir = 0;
-            let pcMoveVal = 0;
+            if (!isModernMode) {
+                // 【经典模式】：WS相对车头进退，AD原地转底盘
+                let pcRotDir = 0;
+                let pcMoveVal = 0;
 
-            if (keys['a']) pcRotDir += 1;
-            if (keys['d']) pcRotDir -= 1;
-            if (keys['w']) pcMoveVal += stats.moveSpeed;
-            if (keys['s']) pcMoveVal -= stats.moveSpeed;
+                if (keys['a']) pcRotDir += 1;
+                if (keys['d']) pcRotDir -= 1;
+                if (keys['w']) pcMoveVal += stats.moveSpeed;
+                if (keys['s']) pcMoveVal -= stats.moveSpeed;
 
-            // PC端发生操作时
-            if (pcRotDir !== 0 || pcMoveVal !== 0) {
-                // 原地转向 (保留原本的 0.045 速度)
-                player.userData.chassis.rotation.y += pcRotDir * 0.045;
+                if (pcRotDir !== 0 || pcMoveVal !== 0) {
+                    player.userData.chassis.rotation.y += pcRotDir * 0.045;
+                    if (pcMoveVal !== 0) {
+                        const dir = new THREE.Vector3(0, 0, 1).applyQuaternion(player.userData.chassis.quaternion);
+                        player.position.add(dir.multiplyScalar(pcMoveVal));
+                        if (keys['w']) isMoving = true; 
+                    }
+                }
+            } else {
+                // 【现代模式】：WASD直接对应屏幕上下左右，底盘自动平滑转向
+                let moveX = 0;
+                let moveZ = 0;
 
-                // 相对车头方向位移
-                if (pcMoveVal !== 0) {
-                    const dir = new THREE.Vector3(0, 0, 1).applyQuaternion(player.userData.chassis.quaternion);
-                    player.position.add(dir.multiplyScalar(pcMoveVal));
-                    if (keys['w']) isMoving = true; // 只有按 W 前进时才算作触发拖尾的“移动”
+                // 3D空间中：-Z 是屏幕上方(W)，+Z 是下方(S)，-X 是左方(A)，+X 是右方(D)
+                if (keys['w']) moveZ += 1;
+                if (keys['s']) moveZ -= 1;
+                if (keys['a']) moveX += 1;
+                if (keys['d']) moveX -= 1;
+
+                if (moveX !== 0 || moveZ !== 0) {
+                    // 向量归一化，防止斜着走(按W+D)时速度叠加变快
+                    const length = Math.sqrt(moveX * moveX + moveZ * moveZ);
+                    const normX = moveX / length;
+                    const normZ = moveZ / length;
+
+                    // 1. 绝对方向位移
+                    player.position.x += normX * stats.moveSpeed;
+                    player.position.z += normZ * stats.moveSpeed;
+
+                    // 2. 底盘自动平滑转向到运动方向 (0.08 的转向速度，手感顺滑且保留坦克重量感)
+                    const targetAngle = Math.atan2(normX, normZ);
+                    const targetQ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), targetAngle);
+                    player.userData.chassis.quaternion.rotateTowards(targetQ, 0.08);
+
+                    isMoving = true; // 只要按下按键就算在移动，用于触发拖尾特效
                 }
             }
 
@@ -618,7 +717,7 @@
                 const length = Math.sqrt(moveX * moveX + moveZ * moveZ);
 
                 // 添加一点摇杆死区，防止误触
-                if (length > 0.1) {
+                if (length > 0.1) { 
                     // (1) 绝对位移：往哪推就往哪走
                     const normX = moveX / length;
                     const normZ = moveZ / length;
@@ -1197,6 +1296,17 @@
                 card.onclick = () => {
                     document.getElementById('pause-trigger').style.display = 'flex';
                     opt.act();
+
+                    // --- 核心优化：清理屏幕上的敌人子弹 ---
+                    // 倒序遍历数组（因为我们要执行删除操作，正序会导致索引错乱）
+                    for (let i = bullets.length - 1; i >= 0; i--) {
+                        if (bullets[i].userData.owner === 'e') {
+                            scene.remove(bullets[i]); // 从 3D 渲染场景中抹除
+                            bullets.splice(i, 1);     // 从物理逻辑数组中剔除
+                        }
+                    }
+                    // ---------------------------------------
+
                     gameActive = true;
                     document.getElementById('upgrade-overlay').style.display = 'none';
                     animate();
@@ -1241,11 +1351,16 @@
             // 显示结算界面并更新分数
             document.getElementById('final-score').innerText = score;
             document.getElementById('gameover-overlay').style.display = 'flex';
+            fetchLeaderboard();
         }
 
         // 绑定重启按钮
 
         document.getElementById('btn-restart').onclick = function () {
+            const btnSubmit = document.getElementById('btn-submit-score');
+            btnSubmit.disabled = false;
+            btnSubmit.innerText = dict[currentLang].submit;
+            btnSubmit.style.background = '#00f2ff';
             // 1. 重置基础数值
             playerHP = 100;
             maxHP = 100;
@@ -1417,6 +1532,67 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
 
+        /** --- 8. 排行榜逻辑 (Supabase) --- **/
+        const TABLE_NAME = 'leaderboard_tank'; // 已经修改为你要求的表名
+
+        async function fetchLeaderboard() {
+            const list = document.getElementById('leaderboard-list');
+            list.innerHTML = `<li style="color: #666;">${dict[currentLang].loading}</li>`;
+            
+            try {
+                const { data, error } = await db
+                    .from(TABLE_NAME)
+                    .select('player_name, score')
+                    .order('score', { ascending: false })
+                    .limit(5); // 只显示前5名
+
+                if (error) throw error;
+
+                if (data.length === 0) {
+                    list.innerHTML = `<li style="color: #666;">${dict[currentLang].empty}</li>`;
+                    return;
+                }
+
+                list.innerHTML = '';
+                data.forEach(item => {
+                    const li = document.createElement('li');
+                    // 简单的防 XSS 注入处理
+                    const safeName = item.player_name.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                    li.innerHTML = `<span style="color:#00f2ff">${safeName}</span> - <span style="color:#ffaa00">${item.score}</span>`;
+                    list.appendChild(li);
+                });
+            } catch (err) {
+                console.error("Fetch error:", err);
+                list.innerHTML = `<li style="color: #ff4444;">Network Error</li>`;
+            }
+        }
+
+        // 绑定上传按钮
+        document.getElementById('btn-submit-score').onclick = async () => {
+            const btn = document.getElementById('btn-submit-score');
+            const nameInput = document.getElementById('player-name');
+            // 默认名字设为你想要的 Tmikn
+            const name = nameInput.value.trim() || 'Tmikn'; 
+
+            btn.disabled = true; // 防止连点
+            btn.innerText = '...';
+
+            try {
+                const { error } = await db
+                    .from(TABLE_NAME)
+                    .insert([{ player_name: name, score: score }]);
+
+                if (error) throw error;
+                
+                btn.innerText = dict[currentLang].submitted;
+                btn.style.background = '#44ff44';
+                fetchLeaderboard(); // 上传成功后立即刷新榜单
+            } catch (err) {
+                console.error("Submit error:", err);
+                btn.disabled = false;
+                btn.innerText = "重试 / Retry";
+            }
+        };
 
     </script>
 </body>
