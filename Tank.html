@@ -1297,15 +1297,25 @@
                     document.getElementById('pause-trigger').style.display = 'flex';
                     opt.act();
 
-                    // --- 核心优化：清理屏幕上的敌人子弹 ---
-                    // 倒序遍历数组（因为我们要执行删除操作，正序会导致索引错乱）
+                    // 1. 清理全图的敌人子弹
                     for (let i = bullets.length - 1; i >= 0; i--) {
                         if (bullets[i].userData.owner === 'e') {
-                            scene.remove(bullets[i]); // 从 3D 渲染场景中抹除
-                            bullets.splice(i, 1);     // 从物理逻辑数组中剔除
+                            scene.remove(bullets[i]);
+                            bullets.splice(i, 1);
                         }
                     }
-                    // ---------------------------------------
+
+                    // 2. 【核心修复】：重置“时间线”，防止瞬间被集火
+                    const currentTime = Date.now();
+                    stats.lastFire = currentTime;
+                    stats.laserLastFire = currentTime;
+                    if (player.userData.sentries) {
+                        player.userData.sentries.forEach(s => s.lastFire = currentTime);
+                    }
+                    // 让敌人在恢复后，随机错开 0~1 秒后再重新开始开火
+                    enemies.forEach(en => {
+                        en.userData.lastFire = currentTime + Math.random() * 1000;
+                    });
 
                     gameActive = true;
                     document.getElementById('upgrade-overlay').style.display = 'none';
@@ -1439,16 +1449,24 @@
             if (isPaused) {
                 // 进入暂停
                 gameActive = false;
-                bgm.pause(); // 暂停背景音乐
+                bgm.pause(); 
                 document.getElementById('pause-overlay').style.display = 'flex';
-                document.getElementById('pause-trigger').innerText = '▶'; // 按钮变为播放图标
+                document.getElementById('pause-trigger').innerText = '▶'; 
             } else {
                 // 恢复游戏
                 document.getElementById('pause-overlay').style.display = 'none';
-                document.getElementById('pause-trigger').innerText = '‖'; // 按钮变回暂停图标
+                document.getElementById('pause-trigger').innerText = '‖'; 
+                
+                // 【核心修复】：手动解除暂停时，也重置时间线！
+                const currentTime = Date.now();
+                stats.lastFire = currentTime;
+                stats.laserLastFire = currentTime;
+                if (player.userData.sentries) player.userData.sentries.forEach(s => s.lastFire = currentTime);
+                enemies.forEach(en => en.userData.lastFire = currentTime + Math.random() * 1000);
+
                 gameActive = true;
-                bgm.play(); // 恢复背景音乐
-                animate(); // 重新启动动画循环
+                bgm.play(); 
+                animate(); 
             }
         }
 
