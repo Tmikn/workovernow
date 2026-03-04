@@ -3,28 +3,38 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Pochinko</title>
+    <title></title>
     <style>
         body {
-            margin: 0; padding: 0;
+            /* 增加了内边距防贴边 */
+            margin: 0; padding: 15px; box-sizing: border-box;
             background-color: #1a1a2e; color: #fff;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             display: flex; flex-direction: column;
             align-items: center; justify-content: center;
-            min-height: 100vh; overflow: hidden;
+            /* 【核心修复1】使用 dvh(动态视口高度) 代替 vh，防止被手机浏览器底部导航栏遮挡 */
+            height: 100vh; height: 100dvh; overflow: hidden;
             transition: background-color 0.1s;
         }
         body.fever-active { animation: feverBg 0.5s infinite alternate; }
         @keyframes feverBg { 0% { background-color: #2b0f2e; } 100% { background-color: #0f213e; } }
 
         #game-container {
-            position: relative; box-shadow: 0 0 30px rgba(0, 255, 255, 0.2);
+            position: relative;
+            /* 【核心修复2】让容器强制保持 2:3 的比例，并根据屏幕高度自动缩放 */
+            width: 100%; 
+            max-width: 400px;
+            aspect-ratio: 2 / 3; 
+            max-height: calc(100dvh - 120px - env(safe-area-inset-bottom));
+            
+            box-shadow: 0 0 30px rgba(0, 255, 255, 0.2);
             border-radius: 10px; overflow: hidden; background: #16213e;
             border: 4px solid #0f3460; transition: box-shadow 0.2s, border-color 0.2s;
         }
         #game-container.fever-active { box-shadow: 0 0 50px #ff007f, 0 0 100px #ff007f; border-color: #ff007f; }
 
-        canvas { display: block; }
+        /* 【核心修复3】让物理画布完全铺满缩放后的容器 */
+        canvas { display: block; width: 100%; height: 100%; }
         
         #ui {
             position: absolute; top: 10px; left: 0; width: 100%;
@@ -42,10 +52,14 @@
         }
 
         .controls {
-            margin-top: 15px; display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; max-width: 420px;
+            margin-top: 15px; display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; 
+            width: 100%; max-width: 400px;
+            /* 【核心修复4】适配 iPhone 底部的白条安全区，防止按钮点不到 */
+            padding-bottom: env(safe-area-inset-bottom);
         }
         button {
-            background-color: #e94560; color: white; border: none; padding: 10px 14px;
+            flex: 1; min-width: 75px; /* 屏幕太窄时自动平分布局 */
+            background-color: #e94560; color: white; border: none; padding: 10px 5px;
             font-size: 14px; font-weight: bold; border-radius: 8px; cursor: pointer;
             box-shadow: 0 4px 6px rgba(0,0,0,0.3); transition: transform 0.1s, background-color 0.2s; user-select: none;
         }
@@ -57,8 +71,10 @@
 
         #buy-btn { background-color: #fca311; }
         #buy-btn:hover:not(:disabled) { background-color: #ffd166; }
+        #buy-btn.can-buy { animation: pulse 0.5s infinite alternate; box-shadow: 0 0 15px rgba(252, 163, 17, 0.8); }
+
         #signin-btn { background-color: #9b59b6; }
-        #signin-btn:hover:not(:disabled) { background-color: #am71c6; }
+        #signin-btn:hover:not(:disabled) { background-color: #af71c6; }
         #ad-btn { background-color: #4caf50; display: none; } 
         #ad-btn:hover:not(:disabled) { background-color: #66bb6a; }
         button:disabled { background-color: #444 !important; color: #888; cursor: not-allowed; box-shadow: none; }
@@ -91,7 +107,7 @@
 
     <div id="ad-overlay">
         <div class="ad-content">
-            <h2 style="margin-top:0;">虚假广告</h2>
+            <h2 style="margin-top:0;">广告</h2>
             <div class="fake-ad-banner">一刀999！装备秒回收</div>
             <p>请观看完毕: <span id="ad-timer" style="color:#fca311; font-size: 24px;">3</span> 秒</p>
         </div>
@@ -109,6 +125,7 @@
         const adBtn = document.getElementById('ad-btn');
         const adOverlay = document.getElementById('ad-overlay');
         const feverAlert = document.getElementById('fever-alert');
+        const adTimerEl = document.getElementById('ad-timer'); 
 
         const CONFIG = {
             width: 400, height: 600,
@@ -116,14 +133,12 @@
             pegRadius: 4, ballRadius: 7,
             defaultBalls: 20, ballPrice: 60, adReward: 5, signinReward: 20,
             maxBallsOnScreen: 80,
-            dropCooldown: 150 // 优化：发射冷却缩短至150ms，手感更好
+            dropCooldown: 150 
         };
 
         let score = 0, ballsLeft = 0;
         let balls = [], pegs = [], slots = [], particles = [], floatingTexts = [];
         let bumpers = []; 
-        
-        // 优化：挡板往下移动到了 480 的位置，留出空间防卡死，并稍微变窄变快
         let platform = { x: 150, y: 480, w: 90, h: 10, vx: 3 }; 
         
         let isWatchingAd = false;
@@ -167,13 +182,20 @@
             scoreEl.innerText = score; ballsLeftEl.innerText = ballsLeft;
             buyBtn.disabled = score < CONFIG.ballPrice;
             
+            if (score >= CONFIG.ballPrice) {
+                buyBtn.classList.add('can-buy');
+            } else {
+                buyBtn.classList.remove('can-buy');
+            }
+
             if (feverTimer > 0) {
                 dropBtn.disabled = false; dropBtn.innerText = "免费点射!"; dropBtn.classList.add('fever-btn');
                 adBtn.style.display = 'none'; dropBtn.style.display = 'inline-block';
             } else {
                 dropBtn.innerText = "投球(空格)"; dropBtn.classList.remove('fever-btn');
                 dropBtn.disabled = ballsLeft <= 0;
-                if (score < CONFIG.ballPrice && ballsLeft <= 0 && balls.length === 0) {
+                
+                if (ballsLeft <= 0 && balls.length === 0) {
                     adBtn.style.display = 'inline-block'; dropBtn.style.display = 'none';
                 } else {
                     adBtn.style.display = 'none'; dropBtn.style.display = 'inline-block';
@@ -193,8 +215,8 @@
                     pegs.push({ x: px, y: py });
                 }
             }
-            bumpers.push({ x: 140, y: 260, radius: 25, bounce: 1.5, color: '#ff2e63', pulse: 0 });
-            bumpers.push({ x: 260, y: 260, radius: 25, bounce: 1.5, color: '#ff2e63', pulse: 0 });
+            bumpers.push({ x: 164, y: 260, radius: 28, bounce: 1.5, color: '#ff2e63', pulse: 0 });
+            bumpers.push({ x: 236, y: 260, radius: 28, bounce: 1.5, color: '#ff2e63', pulse: 0 });
         }
 
         function initSlots() {
@@ -293,10 +315,8 @@
                 
                 let dotProduct = ball.vx * nx + ball.vy * ny;
                 ball.vx = (ball.vx - 2 * dotProduct * nx) * CONFIG.bounce;
-                // 优化：砸到挡板会比普通钉子弹得更高
                 ball.vy = (ball.vy - 2 * dotProduct * ny) * (CONFIG.bounce + 0.2);
                 
-                // 优化：抹油的滑移逻辑，落在挡板左边向左滑，右边向右滑，防止堆积！
                 let rectCenter = rect.x + rect.w / 2;
                 ball.vx += (ball.x < rectCenter ? -1 : 1);
                 
@@ -319,7 +339,6 @@
                 }
             }
 
-            // 【新增】球与球的互相排斥碰撞，彻底杜绝穿模和串串球！
             for (let i = 0; i < balls.length; i++) {
                 for (let j = i + 1; j < balls.length; j++) {
                     let dx = balls[i].x - balls[j].x;
@@ -332,11 +351,9 @@
                         let overlap = (minDist - dist) / 2;
                         let nx = dx / dist; let ny = dy / dist;
                         
-                        // 互相推开
                         balls[i].x += nx * overlap; balls[i].y += ny * overlap;
                         balls[j].x -= nx * overlap; balls[j].y -= ny * overlap;
                         
-                        // 微小的动量交换，让球互相撞飞
                         balls[i].vx += nx * 0.2; balls[i].vy += ny * 0.2;
                         balls[j].vx -= nx * 0.2; balls[j].vy -= ny * 0.2;
                     }
