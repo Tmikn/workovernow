@@ -216,7 +216,7 @@
         <p style="font-size:1.5em; margin-bottom:20px; color: #00f2ff;"><span id="t-go-score">最终评分:</span> <span id="final-score">0</span></p>
         
         <div id="score-submit-zone" style="display: flex; gap: 10px; margin-bottom: 20px;">
-            <input type="text" id="player-name" value="Tmikn" maxlength="12" style="padding: 10px; font-size: 1em; border-radius: 5px; border: 2px solid #00f2ff; background: #111; color: white; text-align: center; width: 150px;">
+            <input type="text" id="player-name" value="无名氏" maxlength="12" style="padding: 10px; font-size: 1em; border-radius: 5px; border: 2px solid #00f2ff; background: #111; color: white; text-align: center; width: 150px;">
             <button id="btn-submit-score" style="background: #00f2ff; color: #000;"><span id="t-submit">上传成绩</span></button>
         </div>
 
@@ -1572,7 +1572,7 @@
             const btn = document.getElementById('btn-submit-score');
             const nameInput = document.getElementById('player-name');
             // 默认名字设为你想要的 Tmikn
-            const name = nameInput.value.trim() || 'Tmikn'; 
+            const name = nameInput.value.trim() || '无名氏'; 
 
             btn.disabled = true; // 防止连点
             btn.innerText = '...';
