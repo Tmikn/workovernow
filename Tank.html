@@ -103,6 +103,18 @@
             transform: scale(1.05);
         }
 
+        /* --- 稀有卡牌专属特效 --- */
+        @keyframes rare-glow {
+            0% { box-shadow: 0 0 10px #ffaa00, inset 0 0 10px #ffaa00; border-color: #ffaa00; }
+            50% { box-shadow: 0 0 30px #ff2a00, inset 0 0 20px #ff2a00; border-color: #ff00ff; }
+            100% { box-shadow: 0 0 10px #ffaa00, inset 0 0 10px #ffaa00; border-color: #ffaa00; }
+        }
+        .upgrade-card.rare {
+            animation: rare-glow 1.5s infinite;
+            background: linear-gradient(135deg, #3a1c00 0%, #1a1a1a 100%);
+            border-width: 3px;
+        }
+
         /* 摇杆 */
         .joystick-zone {
             position: fixed;
@@ -275,7 +287,9 @@
                 ramName: "重型冲角", ramDesc: "对撞击到的敌人造成持续伤害",
                 dmgName: "贫铀穿甲弹", dmgDesc: "主炮基础伤害提升 30 点",
                 laserName: "高能激光束", laserDesc: "在炮塔侧面加装激光器，再次升级增加持续时间与伤害",
-                sentryName: "浮游哨戒炮", sentryDesc: "增加一台自动锁定并攻击敌人的悬浮机炮，最多叠加4台"
+                sentryName: "浮游哨戒炮", sentryDesc: "增加一台自动锁定并攻击敌人的悬浮机炮，最多叠加4台",
+                vampireName: "纳米修复群", vampireDesc: "每次击杀敌人时，车体恢复部分生命值",
+                novaName: "超新星引擎", novaDesc: "主炮攻击形态质变！子弹将呈环形向四面八方发射",
             },
             en: {
                 title: "TANK: COMBAT", start: "INITIALIZE SYSTEM", tips: "[ W/S Move | A/D Turn | Mouse Aim ]",
@@ -299,7 +313,9 @@
                 ramName: "Spiked Bumper", ramDesc: "Deals continuous damage to rammed enemies",
                 dmgName: "DU Shells", dmgDesc: "Increases base damage by 30",
                 laserName: "Energy Laser", laserDesc: "Mounts a laser. Upgrading increases duration and damage",
-                sentryName: "Auto Sentry", sentryDesc: "Adds a hovering drone that auto-targets enemies. Max 4"
+                sentryName: "Auto Sentry", sentryDesc: "Adds a hovering drone that auto-targets enemies. Max 4",
+                vampireName: "Nanobots", vampireDesc: "Restores a small amount of HP upon killing enemies",
+                novaName: "Nova Core", novaDesc: "Weapon altered! Fires bullets in a full 360-degree circle",
             }
         };
 
@@ -422,7 +438,10 @@
 
             sentryCount: 0,        // 哨戒炮数量 (初始0，最高4)
             sentryFireRate: 800,   // 哨戒炮射击间隔 (毫秒)
-            sentryRange: 50        // 索敌范围
+            sentryRange: 50,       // 索敌范围
+
+            isVampire: false, // 是否拥有吸血
+            isNova: false     // 是否拥有新星弹幕
         };
 
         const mouse = new THREE.Vector2();
@@ -776,6 +795,16 @@
                     new THREE.MeshBasicMaterial({ color: isPlayer ? 0x00f2ff : 0xff4444 }));
                 b.position.copy(owner.position).add(new THREE.Vector3(0, 1.2, 0));
                 const dir = new THREE.Vector3(0, 0, 1).applyQuaternion(owner.userData.turretGroup.quaternion);
+                // 【核心修改】：判定是否拥有超新星引擎
+                if (isPlayer && count > 1) {
+                    if (stats.isNova) {
+                        // 🌟 新星形态：均匀分布成一个圆圈！
+                        dir.applyAxisAngle(new THREE.Vector3(0, 1, 0), (Math.PI * 2 / count) * i);
+                    } else {
+                        // 经典形态：扇形排开
+                        dir.applyAxisAngle(new THREE.Vector3(0, 1, 0), (i - (count - 1) / 2) * 0.2);
+                    }
+                }
                 if (isPlayer && count > 1) dir.applyAxisAngle(new THREE.Vector3(0, 1, 0), (i - (count - 1) / 2) * 0.2);
                 b.userData = { velocity: dir.multiplyScalar(isPlayer ? stats.bulletSpeed : 0.45), owner: isPlayer ? 'p' : 'e' };
                 bullets.push(b); scene.add(b);
@@ -915,7 +944,7 @@
                         p.velocity.x *= 0.8;  // 触地摩擦力
                         p.velocity.z *= 0.8;
                     }
-.
+sssss
                     // 临近消失时逐渐缩小
                     if (p.life < 0.4) {
                         const scale = p.life * 2.5;
@@ -1226,7 +1255,7 @@
         }
 
         /** --- 6. 升级系统 (支持多语言重构) --- **/
-        const upgradePool = [
+       const upgradePool = [
             { id: 'fire', act: () => stats.multiShot++ },
             { id: 'rate', act: () => stats.fireRate *= 0.75 },
             { id: 'speed', act: () => stats.moveSpeed += 0.05 },
@@ -1235,32 +1264,20 @@
             { id: 'servo', act: () => stats.turretSpeed += 0.04 },
             { id: 'ram', act: () => stats.ramDamage += 0.5 },
             { id: 'dmg', act: () => stats.bulletDamage += 30 },
-            {
-                id: 'laser',
-                act: () => {
-                    stats.laserLevel++;
-                    if (stats.laserLevel === 1) {
-                        // 第一次获得：模型显现！
-                        player.userData.laserEmitter.visible = true;
-                    } else {
-                        // 再次获得：每次增加 0.25 秒持续时间
-                        stats.laserDuration += 250;
-                    }
-                }
-            },
-            {
-                id: 'sentry',
-                act: () => {
-                    if (stats.sentryCount < 4) {
-                        player.userData.sentries[stats.sentryCount].model.visible = true;
-                        stats.sentryCount++;
-                    }
-                }
-            }
+            { id: 'laser', act: () => { stats.laserLevel++; if (stats.laserLevel === 1) player.userData.laserEmitter.visible = true; else stats.laserDuration += 250; } },
+            { id: 'sentry', act: () => { if (stats.sentryCount < 4) { player.userData.sentries[stats.sentryCount].model.visible = true; stats.sentryCount++; } } },
+            
+            // 🌟 稀有升级录入 (加上 isRare 标签)
+            { id: 'vampire', isRare: true, act: () => stats.isVampire = true },
+            // 新星引擎顺便给你加 5 发多重射击，不然不够圆！
+            { id: 'nova', isRare: true, act: () => { stats.isNova = true; stats.multiShot += 5; } } 
         ];
 
         function gainExp(n) {
             exp += n; score += 10;
+            if (stats.isVampire && playerHP < maxHP) {
+                playerHP = Math.min(maxHP, playerHP + 2);
+            }
             if (exp >= expNeeded) {
                 level++; exp = 0; expNeeded = Math.floor(expNeeded * 1.3) + 3;
                 showUpgrade();
@@ -1274,29 +1291,40 @@
             const container = document.getElementById('upgrade-options');
             container.innerHTML = '';
 
-            // --- 插入部分：动态过滤卡池 ---
             const availableUpgrades = upgradePool.filter(opt => {
-                // 如果是哨戒炮，且数量已经达到上限(4个)，就把它从本次抽卡池中踢出去
-                if (opt.id === 'sentry' && stats.sentryCount >= 4) {
-                    return false;
-                }
-
-                // 💡 未来扩展提示：如果你想限制激光满级为 5 级，可以接着加：
-                // if (opt.id === 'laser' && stats.laserLevel >= 5) return false;
-
-                return true; // 其他卡牌正常保留
+                if (opt.id === 'sentry' && stats.sentryCount >= 4) return false;
+                // 稀有物品只能拿一次，拿过就移出卡池
+                if (opt.id === 'vampire' && stats.isVampire) return false;
+                if (opt.id === 'nova' && stats.isNova) return false;
+                return true; 
             });
 
-            // 从过滤后的干净卡池中，打乱并抽取 3 个
-            const opts = [...availableUpgrades].sort(() => 0.5 - Math.random()).slice(0, 3);
-            // -----------------------------
+            // 【核心算法】：分离普通池和稀有池，并打乱
+            const commons = availableUpgrades.filter(opt => !opt.isRare).sort(() => 0.5 - Math.random());
+            const rares = availableUpgrades.filter(opt => opt.isRare).sort(() => 0.5 - Math.random());
+
+            const opts = [];
+            // 抽取 3 张卡
+            for (let i = 0; i < 3; i++) {
+                // 15% 概率出金！(前提是稀有池里还有货)
+                if (rares.length > 0 && Math.random() < 0.05) {
+                    opts.push(rares.pop());
+                } else if (commons.length > 0) {
+                    opts.push(commons.pop());
+                }
+            }
 
             opts.forEach(opt => {
                 const card = document.createElement('div');
                 card.className = 'upgrade-card';
+                
+                // 如果抽到了金卡，追加专属 CSS 和 Emoji
+                if (opt.isRare) {
+                    card.classList.add('rare');
+                }
 
-                // 从当前语言字典中动态读取卡片名字和描述
-                const nameText = dict[currentLang][opt.id + 'Name'];
+                let nameText = dict[currentLang][opt.id + 'Name'];
+                if (opt.isRare) nameText = `🌟 ${nameText} 🌟`; // 视觉强调
                 const descText = dict[currentLang][opt.id + 'Desc'];
 
                 card.innerHTML = `<h3>${nameText}</h3><p>${descText}</p>`;
@@ -1305,7 +1333,7 @@
                     document.getElementById('pause-trigger').style.display = 'flex';
                     opt.act();
 
-                    // 1. 清理全图的敌人子弹
+                    // 清空敌人子弹防猝死
                     for (let i = bullets.length - 1; i >= 0; i--) {
                         if (bullets[i].userData.owner === 'e') {
                             scene.remove(bullets[i]);
@@ -1313,17 +1341,12 @@
                         }
                     }
 
-                    // 2. 【核心修复】：重置“时间线”，防止瞬间被集火
+                    // 重置时间线防集火
                     const currentTime = Date.now();
                     stats.lastFire = currentTime;
                     stats.laserLastFire = currentTime;
-                    if (player.userData.sentries) {
-                        player.userData.sentries.forEach(s => s.lastFire = currentTime);
-                    }
-                    // 让敌人在恢复后，随机错开 0~1 秒后再重新开始开火
-                    enemies.forEach(en => {
-                        en.userData.lastFire = currentTime + Math.random() * 1000;
-                    });
+                    if (player.userData.sentries) player.userData.sentries.forEach(s => s.lastFire = currentTime);
+                    enemies.forEach(en => en.userData.lastFire = currentTime + Math.random() * 1000);
 
                     gameActive = true;
                     document.getElementById('upgrade-overlay').style.display = 'none';
