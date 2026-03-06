@@ -573,12 +573,11 @@
             group.userData = { 
                 chassis: chassis, 
                 turretGroup: turretGroup, 
-                // 错开出生时的开火时间，防止一刷出来就同步开火
                 lastFire: Date.now() - Math.random() * 3500, 
-                // 专属的开火间隔：2.5秒 到 4.5秒 之间随机
                 fireInterval: 2500 + Math.random() * 2000,   
-                // 专属运动种子，用于制造不同的走位轨迹
-                randomSeed: Math.random() * 100              
+                randomSeed: Math.random() * 100,
+                // 【新增】：1为向右包抄，-1为向左包抄
+                flankDir: Math.random() > 0.5 ? 1 : -1 
             };
 
             // --- 插入部分：副武器激光发射器 (仅玩家专属) ---
@@ -944,7 +943,7 @@
                         p.velocity.x *= 0.8;  // 触地摩擦力
                         p.velocity.z *= 0.8;
                     }
-sssss
+
                     // 临近消失时逐渐缩小
                     if (p.life < 0.4) {
                         const scale = p.life * 2.5;
@@ -969,22 +968,29 @@ sssss
                 stats.lastFire = Date.now();
             }
 
-            // --- 4. 敌人 AI (带有蛇形走位和随机开火) ---
+           // --- 4. 敌人 AI (狼群包围 + 蛇形走位) ---
             const nowTime = Date.now(); // 获取当前统一时间
             enemies.forEach(en => {
-                // 计算指向玩家的绝对基础向量
-                const dirToPlayer = new THREE.Vector3().subVectors(player.position, en.position).normalize();
+                const dirToPlayer = new THREE.Vector3().subVectors(player.position, en.position);
+                const distToPlayer = dirToPlayer.length(); // 顺便算出距离
+                dirToPlayer.normalize();
                 const baseAngle = Math.atan2(dirToPlayer.x, dirToPlayer.z);
 
-                // 1. 运动逻辑：蛇形走位
-                // 利用正弦波(sin)和敌人的随机种子，算出一个左右摇摆的偏移角度 (0.6 弧度约等于 34 度)
-                const swayAngle = baseAngle + Math.sin(nowTime * 0.0015 + en.userData.randomSeed) * 0.6;
-                
-                // 让底盘平滑地转向这个带偏移的路线
-                const targetQChassis = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), swayAngle);
-                en.userData.chassis.quaternion.rotateTowards(targetQChassis, 0.05);
+                // 1. 运动逻辑：狼群包抄
+                let surroundOffset = 0;
+                // 当距离玩家小于 35 时，敌人开始向两侧散开，距离越近散得越开
+                if (distToPlayer < 35) {
+                    surroundOffset = en.userData.flankDir * (1.2 * (1 - distToPlayer / 35));
+                }
 
-                // 让炮塔始终精准瞄准玩家 (稍微平滑一点，体现重量感)
+                // 最终底盘目标角度 = 基础直线角度 + 包抄偏移 + 蛇形微调
+                const swayAngle = baseAngle + surroundOffset + Math.sin(nowTime * 0.0015 + en.userData.randomSeed) * 0.4;
+                
+                // 让底盘平滑地转向这个带偏移的路线 (加快一点转向速度以适应包抄)
+                const targetQChassis = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), swayAngle);
+                en.userData.chassis.quaternion.rotateTowards(targetQChassis, 0.06);
+
+                // 让炮塔始终精准瞄准玩家 (不受底盘包抄影响)
                 const targetQTurret = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), baseAngle);
                 en.userData.turretGroup.quaternion.rotateTowards(targetQTurret, 0.08);
 
@@ -993,18 +999,17 @@ sssss
                     en.userData.hpGroup.quaternion.copy(camera.quaternion);
                 }
 
-                // 距离判定与位移：【注意这里】由于底盘方向变了，要让它沿着底盘当前朝向前进，而不是直指玩家
-                if (en.position.distanceTo(player.position) > 8) {
-                    // 提取底盘的 Z 轴朝向作为实际运动方向
+                // 距离判定与位移
+                if (distToPlayer > 8) {
                     const moveDir = new THREE.Vector3(0, 0, 1).applyQuaternion(en.userData.chassis.quaternion);
-                    en.position.add(moveDir.multiplyScalar(0.08 + level * 0.005));
+                    // 移速随等级提升稍微变快一点，增加后期压迫感
+                    en.position.add(moveDir.multiplyScalar(0.08 + level * 0.006)); 
                 }
 
-                // 2. 开火逻辑：独立随机冷却
+                // 2. 开火逻辑：独立随机冷却 (保持不变)
                 if (nowTime - en.userData.lastFire > en.userData.fireInterval) {
                     fireBullet(en, false);
                     en.userData.lastFire = nowTime;
-                    // 开完火后，再给下一次开火随机一个新时间，彻底打乱节奏
                     en.userData.fireInterval = 2500 + Math.random() * 2000; 
                 }
             });
@@ -1020,9 +1025,9 @@ sssss
                     const posB = b.position.clone(); posB.y = 0;
                     
                     const dist = posA.distanceTo(posB);
-                    if (dist < 3.2) {
+                    if (dist < 3.8) {
                         // 【修复核心 2】：推开的向量也是基于没有 Y 轴差的坐标计算
-                        const push = (3.2 - dist) * 0.5;
+                        const push = (3.8 - dist) * 0.5;
                         const vec = new THREE.Vector3().subVectors(posA, posB).normalize();
                         
                         // 这样 vec.y 就永远是 0，坦克只会平移，绝对不会升空或遁地！
@@ -1306,7 +1311,7 @@ sssss
             const opts = [];
             // 抽取 3 张卡
             for (let i = 0; i < 3; i++) {
-                // 15% 概率出金！(前提是稀有池里还有货)
+                // 5% 概率出金！(前提是稀有池里还有货)
                 if (rares.length > 0 && Math.random() < 0.05) {
                     opts.push(rares.pop());
                 } else if (commons.length > 0) {
@@ -1561,20 +1566,28 @@ sssss
         bindJoy('joy-right', 'stick-r', joyR);
 
         setInterval(() => {
-            if (gameActive && enemies.length < 20 + level * 10) {
-                const en = createTank(0xff4444);
+            // 上限随等级提升得更多
+            if (gameActive && enemies.length < 20 + level * 15) {
+                
+                // 【新增】：高等级时每次生成多个敌人
+                const spawnCount = 1 + Math.floor(level / 4); 
+                
+                for (let i = 0; i < spawnCount; i++) {
+                    // 防止单次循环超出上限
+                    if (enemies.length >= 20 + level * 15) break; 
 
-                // --- 插入部分：初始化血量数据 ---
-                const maxHealth = 80 + (level * 20); // 随等级成长
-                en.userData.maxHp = maxHealth;
-                en.userData.hp = maxHealth;
-                // ------------------------------
+                    const en = createTank(0xff4444);
 
-                const a = Math.random() * Math.PI * 2;
-                en.position.set(player.position.x + Math.cos(a) * 70, 0, player.position.z + Math.sin(a) * 70);
-                enemies.push(en);
+                    const maxHealth = 100; 
+                    en.userData.maxHp = maxHealth;
+                    en.userData.hp = maxHealth;
+
+                    const a = Math.random() * Math.PI * 2;
+                    en.position.set(player.position.x + Math.cos(a) * 70, 0, player.position.z + Math.sin(a) * 70);
+                    enemies.push(en);
+                }
             }
-        }, 1000);
+        }, 800); // 刷新间隔从 1000ms 稍微加快到 800ms
 
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix();
