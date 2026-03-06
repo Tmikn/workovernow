@@ -915,7 +915,7 @@
                         p.velocity.x *= 0.8;  // 触地摩擦力
                         p.velocity.z *= 0.8;
                     }
-
+.
                     // 临近消失时逐渐缩小
                     if (p.life < 0.4) {
                         const scale = p.life * 2.5;
@@ -980,24 +980,34 @@
                 }
             });
 
-            // --- 5. 碰撞与战斗 (保持你原有的逻辑) ---
-            // ... 碰撞检测代码 ...
+            // --- 5. 碰撞与战斗 ---
             const units = [player, ...enemies];
             for (let i = 0; i < units.length; i++) {
                 for (let j = i + 1; j < units.length; j++) {
                     const a = units[i], b = units[j];
-                    const dist = a.position.distanceTo(b.position);
+                    
+                    // 【修复核心 1】：计算距离时，先克隆坐标并把 Y 轴抹平
+                    const posA = a.position.clone(); posA.y = 0;
+                    const posB = b.position.clone(); posB.y = 0;
+                    
+                    const dist = posA.distanceTo(posB);
                     if (dist < 3.2) {
-                        // 原有的物理推开逻辑
+                        // 【修复核心 2】：推开的向量也是基于没有 Y 轴差的坐标计算
                         const push = (3.2 - dist) * 0.5;
-                        const vec = new THREE.Vector3().subVectors(a.position, b.position).normalize();
+                        const vec = new THREE.Vector3().subVectors(posA, posB).normalize();
+                        
+                        // 这样 vec.y 就永远是 0，坦克只会平移，绝对不会升空或遁地！
                         a.position.add(vec.clone().multiplyScalar(push * 0.2));
                         b.position.sub(vec.clone().multiplyScalar(push * 0.8));
+
+                        // 强制把真实坐标的 Y 轴锁死在地面 (防止之前的累积误差)
+                        a.position.y = 0;
+                        b.position.y = 0;
 
                         // 【新增】玩家撞击敌人造成伤害 (a 是玩家的情况)
                         if (a === player && stats.ramDamage > 0) {
                             b.userData.hp -= stats.ramDamage; // 每帧扣血
-                            // --- 插入部分：更新血条 UI ---
+                            // --- 更新血条 UI ---
                             const hpPercent = Math.max(0, enemies[j].userData.hp / enemies[j].userData.maxHp);
                             enemies[j].userData.hpBar.scale.x = hpPercent;
 
@@ -1006,7 +1016,7 @@
                             else if (hpPercent <= 0.5) enemies[j].userData.hpBar.material.color.setHex(0xffff00);
                             // --------------------------
                             if (b.userData.hp <= 0 && !b.userData.dead) {
-                                b.userData.dead = true; // 防止一帧内重复触发wwwww
+                                b.userData.dead = true; // 防止一帧内重复触发
                                 playSound(explodeSound);
                                 // --- 插入触发爆炸 (传入敌人坐标和红色) ---
                                 createExplosion(b.position.clone(), 0xA9A9A9);
@@ -1018,7 +1028,6 @@
                     }
                 }
             }
-
             // --- 6. 光源微闪效果 ---
             player.userData.chassis.children.forEach(child => {
                 if (child instanceof THREE.PointLight && child.color.getHex() === 0xffffff) {
@@ -1152,7 +1161,7 @@
                             // 哨戒炮子弹速度略快一点，伤害可以绑定基础子弹伤害的一半
                             b.userData = {
                                 velocity: dir.multiplyScalar(stats.bulletSpeed * 1.5),
-                                owner: 'p',
+                                owner: 'p',                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   
                                 isSentry: true // 做个标记，如果你想让它伤害低一点
                             };
                             bullets.push(b);
@@ -1164,8 +1173,7 @@
                     }
                 }
             }
-            // ----------------------------------------
-            // ----------------------------------------
+
             // --- 7. 子弹处理 ---
             for (let i = bullets.length - 1; i >= 0; i--) {
                 const b = bullets[i]; b.position.add(b.userData.velocity);
